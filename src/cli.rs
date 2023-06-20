@@ -14,6 +14,8 @@ pub struct Args {
 pub enum Command {
     /// Checkes the status of the crates in a given workspace path against crates.io
     Status(Status),
+    /// Claim ownership of unpublished crates on crates.io
+    Claim(Claim),
 }
 
 #[derive(Parser, Debug)]
@@ -30,6 +32,16 @@ pub struct Status {
     #[arg(long, short)]
     /// Only print crate names
     pub quiet: bool,
+    #[arg(default_value = ".")]
+    /// Path to the cargo workspace
+    pub path: PathBuf,
+}
+
+#[derive(Parser, Debug)]
+pub struct Claim {
+    /// Don't actually claim crates
+    #[arg(long, short)]
+    pub dry_run: bool,
     #[arg(default_value = ".")]
     /// Path to the cargo workspace
     pub path: PathBuf,

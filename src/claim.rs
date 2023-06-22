@@ -3,7 +3,7 @@ use std::fs::{create_dir, remove_dir_all};
 use std::io::Write;
 use std::path::PathBuf;
 use std::time::Duration;
-use std::{env, fs};
+use std::{env, fs, thread};
 
 use crate::{cli::Claim, shared::PARITY_CRATE_OWNER_ID};
 
@@ -30,6 +30,7 @@ pub fn handle_claim(claim: Claim) -> Result<()> {
 
     let mut stdout = StandardStream::stdout(ColorChoice::Auto);
     let mut stderr = StandardStream::stderr(ColorChoice::Auto);
+    let mut throttle = false;
 
     writeln!(
         stderr,
@@ -37,13 +38,6 @@ pub fn handle_claim(claim: Claim) -> Result<()> {
     )?;
 
     for member in members {
-        if member.publish().is_some() {
-            stdout.set_color(ColorSpec::new().set_fg(Some(Color::Yellow)))?;
-            writeln!(stdout, "{} is set to not publish", member.name())?;
-            stdout.set_color(ColorSpec::new().set_fg(None))?;
-            continue;
-        }
-
         if let Ok(cra) = cratesio.full_crate(&member.name(), false) {
             let owners = cra.owners;
             let parity_own = owners.iter().any(|user| user.id == PARITY_CRATE_OWNER_ID);
@@ -56,7 +50,20 @@ pub fn handle_claim(claim: Claim) -> Result<()> {
                 )?;
                 stdout.set_color(ColorSpec::new().set_fg(None))?;
             }
+            if member.publish().is_some() {
+                stdout.set_color(ColorSpec::new().set_fg(Some(Color::Yellow)))?;
+                writeln!(stdout, "{} is set to not publish", member.name())?;
+                stdout.set_color(ColorSpec::new().set_fg(None))?;
+                continue;
+            }
         } else {
+            if member.publish().is_some() {
+                stdout.set_color(ColorSpec::new().set_fg(Some(Color::Yellow)))?;
+                writeln!(stdout, "{} is set to not publish", member.name())?;
+                stdout.set_color(ColorSpec::new().set_fg(None))?;
+                continue;
+            }
+
             let manifest = write_manifest(&member.name())?;
             let opts = PublishOpts {
                 config: &config,
@@ -77,7 +84,18 @@ pub fn handle_claim(claim: Claim) -> Result<()> {
                 },
             };
             let workspace = Workspace::new(&manifest, &config)?;
-            cargo::ops::publish(&workspace, &opts)?;
+
+
+            if !throttle && cargo::ops::publish(&workspace, &opts).is_err() {
+                throttle = true;
+            }
+
+            if throttle {
+                // crates.io rate limit
+                thread::sleep(Duration::from_secs(60*10+5));
+                cargo::ops::publish(&workspace, &opts)?;
+            }
+
             remove_dir_all(manifest.parent().unwrap())?;
             stdout.set_color(ColorSpec::new().set_fg(Some(Color::Blue)))?;
             if claim.dry_run {

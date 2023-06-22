@@ -5,7 +5,8 @@ use std::path::PathBuf;
 use std::time::Duration;
 use std::{env, fs, thread};
 
-use crate::{cli::Claim, shared::PARITY_CRATE_OWNER_ID};
+use crate::shared::parity_crate_owner_id;
+use crate::{cli::Claim};
 
 use anyhow::{Context, Result};
 use cargo::core::resolver::CliFeatures;
@@ -40,7 +41,7 @@ pub fn handle_claim(claim: Claim) -> Result<()> {
     for member in members {
         if let Ok(cra) = cratesio.full_crate(&member.name(), false) {
             let owners = cra.owners;
-            let parity_own = owners.iter().any(|user| user.id == PARITY_CRATE_OWNER_ID);
+            let parity_own = owners.iter().any(|user| user.id == parity_crate_owner_id());
             if !parity_own {
                 stdout.set_color(ColorSpec::new().set_fg(Some(Color::Red)))?;
                 writeln!(

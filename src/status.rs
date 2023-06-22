@@ -1,5 +1,5 @@
 use crate::cli::Status;
-use crate::shared::PARITY_CRATE_OWNER_ID;
+use crate::shared::parity_crate_owner_id;
 
 use anyhow::Result;
 use cargo::core::Workspace;
@@ -59,7 +59,7 @@ pub fn handle_status(status: Status) -> Result<()> {
                 == cra.versions.last().unwrap().num.split('-').next().unwrap();
 
             let owners = cra.owners;
-            let parity_own = owners.iter().any(|user| user.id == PARITY_CRATE_OWNER_ID);
+            let parity_own = owners.iter().any(|user| user.id == parity_crate_owner_id());
 
             if status.external && parity_own {
                 continue;

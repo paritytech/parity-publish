@@ -5,17 +5,17 @@ use std::path::PathBuf;
 use std::time::Duration;
 use std::{env, fs, thread};
 
+use crate::cli::Claim;
 use crate::shared::parity_crate_owner_id;
-use crate::{cli::Claim};
 
 use anyhow::{Context, Result};
 use cargo::core::resolver::CliFeatures;
 use cargo::core::Workspace;
 use cargo::ops::{Packages, PublishOpts};
-use crates_io_api::SyncClient;
+use crates_io_api::AsyncClient;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
-pub fn handle_claim(claim: Claim) -> Result<()> {
+pub async fn handle_claim(claim: Claim) -> Result<()> {
     let config = cargo::Config::default()?;
     config.shell().set_verbosity(cargo::core::Verbosity::Quiet);
     let path = claim.path.canonicalize()?.join("Cargo.toml");
@@ -24,7 +24,7 @@ pub fn handle_claim(claim: Claim) -> Result<()> {
     let token = env::var("PARITY_PUBLISH_CRATESIO_TOKEN")
         .context("PARITY_PUBLISH_CRATESIO_TOKEN must be set")?;
 
-    let cratesio = SyncClient::new(
+    let cratesio = AsyncClient::new(
         &format!("{}/{}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION")),
         Duration::from_millis(0),
     )?;
@@ -39,7 +39,7 @@ pub fn handle_claim(claim: Claim) -> Result<()> {
     )?;
 
     for member in members {
-        if let Ok(cra) = cratesio.full_crate(&member.name(), false) {
+        if let Ok(cra) = cratesio.full_crate(&member.name(), false).await {
             let owners = cra.owners;
             let parity_own = owners.iter().any(|user| user.id == parity_crate_owner_id());
             if !parity_own {
@@ -86,14 +86,13 @@ pub fn handle_claim(claim: Claim) -> Result<()> {
             };
             let workspace = Workspace::new(&manifest, &config)?;
 
-
             if !throttle && cargo::ops::publish(&workspace, &opts).is_err() {
                 throttle = true;
             }
 
             if throttle {
                 // crates.io rate limit
-                thread::sleep(Duration::from_secs(60*10+5));
+                thread::sleep(Duration::from_secs(60 * 10 + 5));
                 cargo::ops::publish(&workspace, &opts)?;
             }
 

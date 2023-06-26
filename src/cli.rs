@@ -16,6 +16,7 @@ pub enum Command {
     Status(Status),
     /// Claim ownership of unpublished crates on crates.io
     Claim(Claim),
+    Diff(Diff),
 }
 
 #[derive(Parser, Debug)]
@@ -42,6 +43,15 @@ pub struct Claim {
     /// Don't actually claim crates
     #[arg(long, short)]
     pub dry_run: bool,
+    #[arg(default_value = ".")]
+    /// Path to the cargo workspace
+    pub path: PathBuf,
+}
+
+#[derive(Parser, Debug)]
+pub struct Diff {
+    #[arg(long, short)]
+    pub verbose: bool,
     #[arg(default_value = ".")]
     /// Path to the cargo workspace
     pub path: PathBuf,

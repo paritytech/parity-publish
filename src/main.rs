@@ -1,13 +1,13 @@
 use anyhow::Result;
 use clap::Parser;
 
+mod apply;
 mod changed;
 mod claim;
 mod cli;
+mod plan;
 mod shared;
 mod status;
-mod apply;
-mod plan;
 
 #[tokio::main]
 async fn main() -> Result<()> {

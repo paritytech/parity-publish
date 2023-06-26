@@ -1,11 +1,9 @@
 use crate::cli::Status;
-use crate::shared::parity_crate_owner_id;
+use crate::shared::{self, parity_crate_owner_id};
 
 use anyhow::Result;
 use cargo::core::Workspace;
-use crates_io_api::AsyncClient;
 use std::io::Write;
-use std::{env, time::Duration};
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 fn color_ok_red(stdout: &mut impl WriteColor, ok: bool, color: Color) -> Result<()> {
@@ -24,10 +22,7 @@ pub async fn handle_status(status: Status) -> Result<()> {
     let workspace = Workspace::new(&path, &config)?;
     let members = workspace.members();
 
-    let cratesio = AsyncClient::new(
-        &format!("{}/{}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION")),
-        Duration::from_millis(0),
-    )?;
+    let cratesio = shared::cratesio()?;
 
     let mut stdout = StandardStream::stdout(ColorChoice::Auto);
     let mut stderr = StandardStream::stderr(ColorChoice::Auto);

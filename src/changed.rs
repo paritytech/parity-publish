@@ -3,14 +3,14 @@ use std::env::temp_dir;
 use std::fs::{create_dir_all, metadata, remove_dir_all, OpenOptions};
 use std::io::Write;
 use std::process::Command;
-use std::{env, fs::create_dir, io::Cursor, path::Path, time::Duration};
+use std::{fs::create_dir, io::Cursor, path::Path};
 
 use crate::cli::Changed;
+use crate::shared;
 use anyhow::{ensure, Result};
 use cargo::core::{Package, Workspace};
 use cargo::sources::PathSource;
 use cargo::Config;
-use crates_io_api::AsyncClient;
 use termcolor::{ColorChoice, StandardStream};
 
 pub async fn handle_changed(diff: Changed) -> Result<()> {
@@ -19,10 +19,7 @@ pub async fn handle_changed(diff: Changed) -> Result<()> {
     let path = diff.path.canonicalize()?.join("Cargo.toml");
     let workspace = Workspace::new(&path, &config)?;
 
-    let cratesio = AsyncClient::new(
-        &format!("{}/{}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION")),
-        Duration::from_millis(0),
-    )?;
+    let cratesio = shared::cratesio()?;
 
     let mut stdout = StandardStream::stdout(ColorChoice::Auto);
     let mut stderr = StandardStream::stderr(ColorChoice::Auto);

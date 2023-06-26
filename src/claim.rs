@@ -6,13 +6,12 @@ use std::time::Duration;
 use std::{env, fs, thread};
 
 use crate::cli::Claim;
-use crate::shared::parity_crate_owner_id;
+use crate::shared::{self, parity_crate_owner_id};
 
 use anyhow::{Context, Result};
 use cargo::core::resolver::CliFeatures;
 use cargo::core::Workspace;
 use cargo::ops::{Packages, PublishOpts};
-use crates_io_api::AsyncClient;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 pub async fn handle_claim(claim: Claim) -> Result<()> {
@@ -24,10 +23,7 @@ pub async fn handle_claim(claim: Claim) -> Result<()> {
     let token = env::var("PARITY_PUBLISH_CRATESIO_TOKEN")
         .context("PARITY_PUBLISH_CRATESIO_TOKEN must be set")?;
 
-    let cratesio = AsyncClient::new(
-        &format!("{}/{}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION")),
-        Duration::from_millis(0),
-    )?;
+    let cratesio = shared::cratesio()?;
 
     let mut stdout = StandardStream::stdout(ColorChoice::Auto);
     let mut stderr = StandardStream::stderr(ColorChoice::Auto);

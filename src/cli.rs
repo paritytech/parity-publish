@@ -59,7 +59,6 @@ pub struct Changed {
     pub path: PathBuf,
 }
 
-
 #[derive(Parser, Debug)]
 pub struct Plan {
     #[arg(default_value = ".")]

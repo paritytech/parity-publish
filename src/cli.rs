@@ -16,7 +16,7 @@ pub enum Command {
     Status(Status),
     /// Claim ownership of unpublished crates on crates.io
     Claim(Claim),
-    Diff(Diff),
+    Changed(Changed),
 }
 
 #[derive(Parser, Debug)]
@@ -49,7 +49,7 @@ pub struct Claim {
 }
 
 #[derive(Parser, Debug)]
-pub struct Diff {
+pub struct Changed {
     #[arg(long, short)]
     pub verbose: bool,
     #[arg(default_value = ".")]

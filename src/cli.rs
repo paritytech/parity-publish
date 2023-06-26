@@ -17,6 +17,8 @@ pub enum Command {
     /// Claim ownership of unpublished crates on crates.io
     Claim(Claim),
     Changed(Changed),
+    Plan(Plan),
+    Apply(Apply),
 }
 
 #[derive(Parser, Debug)]
@@ -52,6 +54,21 @@ pub struct Claim {
 pub struct Changed {
     #[arg(long, short)]
     pub verbose: bool,
+    #[arg(default_value = ".")]
+    /// Path to the cargo workspace
+    pub path: PathBuf,
+}
+
+
+#[derive(Parser, Debug)]
+pub struct Plan {
+    #[arg(default_value = ".")]
+    /// Path to the cargo workspace
+    pub path: PathBuf,
+}
+
+#[derive(Parser, Debug)]
+pub struct Apply {
     #[arg(default_value = ".")]
     /// Path to the cargo workspace
     pub path: PathBuf,

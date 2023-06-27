@@ -20,8 +20,12 @@ pub async fn handle_claim(claim: Claim) -> Result<()> {
     let path = claim.path.canonicalize()?.join("Cargo.toml");
     let workspace = Workspace::new(&path, &config)?;
     let members = workspace.members();
-    let token = env::var("PARITY_PUBLISH_CRATESIO_TOKEN")
-        .context("PARITY_PUBLISH_CRATESIO_TOKEN must be set")?;
+    let token = if claim.dry_run {
+        String::new()
+    } else {
+        env::var("PARITY_PUBLISH_CRATESIO_TOKEN")
+        .context("PARITY_PUBLISH_CRATESIO_TOKEN must be set")?
+    };
 
     let cratesio = shared::cratesio()?;
 

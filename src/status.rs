@@ -41,9 +41,9 @@ pub async fn handle_status(status: Status) -> Result<()> {
         // crates may have no publish set because the current workflow doesn't involve publishing
         // to crates.io
         // so keep this disabled for now just to be safe.
-        //if member.publish().is_some() {
-        //    continue;
-        //}
+        if member.publish().is_some() {
+            continue;
+        }
 
         if let Ok(cra) = cratesio.full_crate(&member.name(), false).await {
             if status.missing {

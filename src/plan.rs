@@ -26,7 +26,7 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
     let path = plan.path.canonicalize()?.join("Cargo.toml");
     let workspace = Workspace::new(&path, &config)?;
 
-    let cratesio = shared::cratesio()?;
+    let _cratesio = shared::cratesio()?;
     let crates = workspace
         .members()
         .filter(|m| m.publish().is_none())
@@ -35,8 +35,8 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
     let mut deps = HashMap::new();
     let mut order = Vec::new();
 
-    let mut stdout = StandardStream::stdout(ColorChoice::Auto);
-    let mut stderr = StandardStream::stderr(ColorChoice::Auto);
+    let _stdout = StandardStream::stdout(ColorChoice::Auto);
+    let _stderr = StandardStream::stderr(ColorChoice::Auto);
 
     // map name to dpes
     for member in workspace.members() {

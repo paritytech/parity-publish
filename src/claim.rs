@@ -41,6 +41,12 @@ pub async fn handle_claim(claim: Claim) -> Result<()> {
     for member in members {
         if let Ok(cra) = cratesio.full_crate(&member.name(), false).await {
             let owners = cra.owners;
+            if member.publish().is_some() {
+                stdout.set_color(ColorSpec::new().set_fg(Some(Color::Yellow)))?;
+                writeln!(stdout, "{} is set to not publish", member.name())?;
+                stdout.set_color(ColorSpec::new().set_fg(None))?;
+                continue;
+            }
             let parity_own = owners.iter().any(|user| user.id == parity_crate_owner_id());
             if !parity_own {
                 stdout.set_color(ColorSpec::new().set_fg(Some(Color::Red)))?;
@@ -50,12 +56,6 @@ pub async fn handle_claim(claim: Claim) -> Result<()> {
                     member.name()
                 )?;
                 stdout.set_color(ColorSpec::new().set_fg(None))?;
-            }
-            if member.publish().is_some() {
-                stdout.set_color(ColorSpec::new().set_fg(Some(Color::Yellow)))?;
-                writeln!(stdout, "{} is set to not publish", member.name())?;
-                stdout.set_color(ColorSpec::new().set_fg(None))?;
-                continue;
             }
         } else {
             if member.publish().is_some() {

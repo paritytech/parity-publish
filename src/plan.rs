@@ -1,4 +1,7 @@
-use std::{collections::{HashMap, HashSet}, path::PathBuf};
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+};
 
 use anyhow::Result;
 use cargo::core::{dependency::DepKind, Workspace};
@@ -80,7 +83,13 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
             from: c.version().to_string(),
             to: c.version().to_string(),
             bump: "unkown".to_string(),
-            path: c.manifest_path().parent().unwrap().strip_prefix(path.parent().unwrap()).unwrap().to_path_buf(),
+            path: c
+                .manifest_path()
+                .parent()
+                .unwrap()
+                .strip_prefix(path.parent().unwrap())
+                .unwrap()
+                .to_path_buf(),
         });
     }
 

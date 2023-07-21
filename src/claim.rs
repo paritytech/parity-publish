@@ -11,7 +11,7 @@ use crate::shared::{self, parity_crate_owner_id};
 use anyhow::{Context, Result};
 use cargo::core::resolver::CliFeatures;
 use cargo::core::Workspace;
-use cargo::ops::{Packages, PublishOpts};
+use cargo::ops::{yank, Packages, PublishOpts};
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 pub async fn handle_claim(claim: Claim) -> Result<()> {
@@ -24,7 +24,7 @@ pub async fn handle_claim(claim: Claim) -> Result<()> {
         String::new()
     } else {
         env::var("PARITY_PUBLISH_CRATESIO_TOKEN")
-        .context("PARITY_PUBLISH_CRATESIO_TOKEN must be set")?
+            .context("PARITY_PUBLISH_CRATESIO_TOKEN must be set")?
     };
 
     let cratesio = shared::cratesio()?;
@@ -39,7 +39,7 @@ pub async fn handle_claim(claim: Claim) -> Result<()> {
     )?;
 
     for member in members {
-        if let Ok(cra) = cratesio.full_crate(&member.name(), false).await {
+        if let Ok(cra) = cratesio.full_crate(&member.name(), claim.yank).await {
             let owners = cra.owners;
             if member.publish().is_some() {
                 stdout.set_color(ColorSpec::new().set_fg(Some(Color::Yellow)))?;
@@ -56,6 +56,27 @@ pub async fn handle_claim(claim: Claim) -> Result<()> {
                     member.name()
                 )?;
                 stdout.set_color(ColorSpec::new().set_fg(None))?;
+            } else {
+                let mut did_yank = false;
+                for ver in cra.versions {
+                    if !ver.yanked {
+                        if !claim.dry_run {
+                            yank(
+                                &config,
+                                Some(cra.name.clone()),
+                                Some(ver.num),
+                                Some(token.clone().into()),
+                                None,
+                                false,
+                                None,
+                            )?;
+                        }
+                        did_yank = true;
+                    }
+                }
+                if did_yank {
+                    writeln!(stdout, "{} yanked", member.name())?;
+                }
             }
         } else {
             if member.publish().is_some() {

@@ -59,7 +59,7 @@ pub async fn handle_claim(claim: Claim) -> Result<()> {
             } else {
                 let mut did_yank = false;
                 for ver in cra.versions {
-                    if !ver.yanked {
+                    if ver.yanked {
                         if !claim.dry_run {
                             yank(
                                 &config,
@@ -67,7 +67,7 @@ pub async fn handle_claim(claim: Claim) -> Result<()> {
                                 Some(ver.num),
                                 Some(token.clone().into()),
                                 None,
-                                false,
+                                true,
                                 None,
                             )?;
                         }

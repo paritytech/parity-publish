@@ -51,7 +51,7 @@ pub async fn handle_status(status: Status) -> Result<()> {
             }
 
             let versions_match = member.version().to_string().split('-').next().unwrap()
-                == cra.versions.last().unwrap().num.split('-').next().unwrap();
+                == cra.max_version.split('-').next().unwrap();
 
             let owners = cra.owners;
             let parity_own = owners.iter().any(|user| user.id == parity_crate_owner_id());

@@ -11,6 +11,7 @@ use anyhow::{ensure, Result};
 use cargo::core::{Package, Workspace};
 use cargo::sources::PathSource;
 use cargo::Config;
+use crates_io_api::FullCrate;
 use termcolor::{ColorChoice, StandardStream};
 
 pub async fn handle_changed(diff: Changed) -> Result<()> {
@@ -22,28 +23,58 @@ pub async fn handle_changed(diff: Changed) -> Result<()> {
     let cratesio = shared::cratesio()?;
 
     let mut stdout = StandardStream::stdout(ColorChoice::Auto);
-    let mut stderr = StandardStream::stderr(ColorChoice::Auto);
-
-    let _ = create_dir("download");
-    let _ = create_dir("crates");
 
     let mut upstreams = Vec::new();
 
     for member in workspace.members().filter(|p| p.publish().is_none()) {
-        let entry = cratesio.get_crate(&member.name()).await?;
+        let entry = cratesio.full_crate(&member.name(), false).await?;
         upstreams.push(entry);
     }
 
-    for (member, entry) in workspace
-        .members()
-        .filter(|p| p.publish().is_none())
-        .zip(&upstreams)
-    {
-        let version = &entry.versions[0];
-        let url = format!("https://crates.io{}", version.dl_path);
+    download_crates(&workspace, &upstreams).await?;
+
+    for member in workspace.members().filter(|p| p.publish().is_none()) {
+        let entry = upstreams
+            .iter()
+            .find(|u| u.name == member.name().as_str())
+            .unwrap();
+        let version = if let Some(ver) = entry.versions.iter().find(|v| v.num == entry.max_version)
+        {
+            ver
+        } else {
+            continue;
+        };
+
+        if diff_crate(diff.verbose, &config, member, &version.num)? {
+            writeln!(stdout, "{}", member.name())?;
+        }
+    }
+
+    Ok(())
+}
+
+pub async fn download_crates(workspace: &Workspace<'_>, upstreams: &[FullCrate]) -> Result<()> {
+    let _ = create_dir("download");
+    let mut stderr = StandardStream::stderr(ColorChoice::Auto);
+
+    for member in workspace.members().filter(|p| p.publish().is_none()) {
+        let entry = upstreams
+            .iter()
+            .find(|u| u.name == member.name().as_str())
+            .unwrap();
+        let version = &entry.max_version;
+
+        let max_ver =
+            if let Some(max_ver) = entry.versions.iter().find(|v| v.num == entry.max_version) {
+                max_ver
+            } else {
+                continue;
+            };
+
+        let url = format!("https://crates.io{}", max_ver.dl_path);
 
         let path =
-            Path::new("download").join(format!("{}-{}.crate.tar.gz", member.name(), version.num));
+            Path::new("download").join(format!("{}-{}.crate.tar.gz", member.name(), version));
 
         if let Ok(stat) = metadata(&path) {
             if stat.len() != 0 {
@@ -53,32 +84,20 @@ pub async fn handle_changed(diff: Changed) -> Result<()> {
 
         let mut file = std::fs::File::create(path)?;
 
-        writeln!(stderr, "downloading {}-{}...", member.name(), version.num)?;
+        writeln!(stderr, "downloading {}-{}...", member.name(), version)?;
 
         let response = reqwest::get(url).await?;
         let mut content = Cursor::new(response.bytes().await?);
         std::io::copy(&mut content, &mut file)?;
     }
 
-    for (member, entry) in workspace
-        .members()
-        .filter(|p| p.publish().is_none())
-        .zip(&upstreams)
-    {
-        let version = &entry.versions[0];
-
-        if diff_crate(&diff, &config, member, &version.num)? {
-            writeln!(stdout, "{}", member.name())?;
-        }
-    }
-
     Ok(())
 }
 
-fn diff_crate(diff: &Changed, config: &Config, member: &Package, version: &str) -> Result<bool> {
+pub fn diff_crate(verbose: bool, config: &Config, member: &Package, version: &str) -> Result<bool> {
     let mut stderr = StandardStream::stderr(ColorChoice::Auto);
 
-    if diff.verbose {
+    if verbose {
         writeln!(stderr, "diffing {}-{}...", member.name(), version)?;
     }
 
@@ -131,7 +150,7 @@ fn diff_crate(diff: &Changed, config: &Config, member: &Package, version: &str) 
 
     for file in &files {
         if !upstream_files.contains(file) {
-            if diff.verbose {
+            if verbose {
                 writeln!(stderr, "new file {}", file.display())?;
             }
             changed = true;
@@ -140,7 +159,7 @@ fn diff_crate(diff: &Changed, config: &Config, member: &Package, version: &str) 
 
     for file in &upstream_files {
         if !files.contains(file) {
-            if diff.verbose {
+            if verbose {
                 writeln!(stderr, "file {} was deleted", file.display())?;
             }
             changed = true;
@@ -158,7 +177,7 @@ fn diff_crate(diff: &Changed, config: &Config, member: &Package, version: &str) 
                 || std::fs::read(prefix.join(file))?
                     != std::fs::read(member.manifest_path().parent().unwrap().join(file))?
             {
-                if diff.verbose {
+                if verbose {
                     writeln!(stderr, "file changed {}", file.display())?;
                 }
                 changed = true;

@@ -64,6 +64,12 @@ pub struct Changed {
 
 #[derive(Parser, Debug)]
 pub struct Plan {
+    /// add a pre release part to the published version
+    #[arg(long, short)]
+    pub pre: Option<String>,
+    /// publish all crates even if they have not Changed
+    #[arg(long, short)]
+    pub all: bool,
     #[arg(default_value = ".")]
     /// Path to the cargo workspace
     pub path: PathBuf,

@@ -79,7 +79,7 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
             keep_going: false,
             to_publish: Packages::Packages(vec![pkg.name.clone()]),
             targets: Vec::new(),
-            dry_run: false,
+            dry_run: apply.dry_run,
             registry: None,
             cli_features: CliFeatures::new_all(false),
         };

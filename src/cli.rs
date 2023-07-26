@@ -77,6 +77,9 @@ pub struct Plan {
 
 #[derive(Parser, Debug)]
 pub struct Apply {
+    /// Don't actually publish crates
+    #[arg(long, short)]
+    pub dry_run: bool,
     #[arg(default_value = ".")]
     /// Path to the cargo workspace
     pub path: PathBuf,

@@ -18,11 +18,13 @@ use crate::{
 
 #[derive(serde::Serialize, serde::Deserialize, Default)]
 pub struct Planner {
-    pub publish: Vec<Publish>,
+    #[serde(rename = "crate")]
+    pub crates: Vec<Publish>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default)]
 pub struct Publish {
+    pub publish: bool,
     pub name: String,
     pub from: String,
     pub to: String,
@@ -52,7 +54,6 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
     let cratesio = shared::cratesio()?;
     let workspace_crates = workspace
         .members()
-        .filter(|m| m.publish().is_none())
         .map(|m| (m.name().as_str(), m))
         .collect::<HashMap<_, _>>();
 
@@ -63,15 +64,17 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
     writeln!(stdout, "looking up crates...",)?;
 
     for package in workspace_crates.values() {
-        if package.publish().is_some() {
+        let c = if let Ok(c) = cratesio.full_crate(package.name().as_str(), true).await {
+            c
+        } else {
             continue;
-        }
+        };
 
-        let c = cratesio.full_crate(package.name().as_str(), true).await?;
         let parity_own = c
             .owners
             .iter()
-            .any(|user| user.id == parity_crate_owner_id());
+            .any(|user| user.id == parity_crate_owner_id())
+            || package.publish().is_some();
         if !parity_own {
             stdout.set_color(ColorSpec::new().set_fg(Some(Color::Red)))?;
             writeln!(
@@ -93,10 +96,6 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
 
     // map name to deps
     for member in workspace.members() {
-        if member.publish().is_some() {
-            continue;
-        }
-
         let deps_list = member
             .dependencies()
             .iter()
@@ -131,17 +130,24 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
     println!("order: {}", order.len());
 
     for c in order {
-        let upstreamc = upstream.get(c).unwrap();
+        let mut publish = true;
+
+        let upstreamc = upstream.get(c);
+        let upstream_version = upstreamc
+            .and_then(|c| c.max_stable_version.clone())
+            .unwrap_or("0.0.0".to_string());
         let c = *workspace_crates.get(c).unwrap();
 
-        let from =
-            semver::Version::parse(upstreamc.max_stable_version.as_deref().unwrap_or("0.0.0"))
-                .unwrap();
+        if c.publish().is_some() {
+            publish = false;
+        }
+
+        let from = semver::Version::parse(&upstream_version).unwrap();
         let mut to = from.clone();
         let mut rewrite = Vec::new();
 
         if let Some(ref pre) = plan.pre {
-        to.pre = Prerelease::new( pre).unwrap();
+            to.pre = Prerelease::new(pre).unwrap();
         }
 
         to.minor += 1;
@@ -149,20 +155,28 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
 
         // if the version is already taken assume it's from a previous pre release and use this
         // version instead of making a new release
-        if !upstreamc.versions.iter().any(|v| v.num == to.to_string()) && to.pre.is_empty() {
-            println!("c");
-            continue;
+        if let Some(upstreamc) = upstreamc {
+            if !upstreamc.versions.iter().any(|v| v.num == to.to_string()) && to.pre.is_empty() {
+                publish = false;
+            }
         }
 
         // we need to update the package even if nothing has changed if we're updating the deps in
         // a breaking way.
-        let deps_breaking = c.dependencies().iter().any(|d| breaking.contains(d.package_name().as_str()));
+        let deps_breaking = c
+            .dependencies()
+            .iter()
+            .any(|d| breaking.contains(d.package_name().as_str()));
 
-        if let Some(ref max_ver) = upstreamc.max_stable_version {
-            if let Some(_) = upstreamc.versions.iter().find(|v| &v.num == max_ver) {
-                if !deps_breaking && !plan.all && !diff_crate(false, &config, c, &max_ver)? {
-                    println!("b");
-                    continue;
+        if let Some(upstreamc) = upstreamc {
+            if let Some(_) = upstreamc
+                .versions
+                .iter()
+                .find(|v| v.num == upstream_version)
+            {
+                if !deps_breaking && !plan.all && !diff_crate(false, &config, c, &upstream_version)?
+                {
+                    publish = false;
                 }
             }
         }
@@ -188,9 +202,17 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
 
         new_versions.insert(c.name().to_string(), to.to_string());
 
-        rewrite_deps(&plan,c, &workspace_crates, &new_versions, &upstream, &mut rewrite)?;
+        rewrite_deps(
+            &plan,
+            c,
+            &workspace_crates,
+            &new_versions,
+            &upstream,
+            &mut rewrite,
+        )?;
 
-        planner.publish.push(Publish {
+        planner.crates.push(Publish {
+            publish,
             name: c.name().to_string(),
             from: from.to_string(),
             to: to.to_string(),
@@ -244,8 +266,8 @@ fn rewrite_deps(
                 rewrite.push(RewriteDep {
                     name: dep.package_name().to_string(),
                     version: new_ver,
-                    path:
-                        dep_crate.manifest_path()
+                    path: dep_crate
+                        .manifest_path()
                         .parent()
                         .unwrap()
                         .strip_prefix(path)

@@ -5,7 +5,7 @@ use cargo::{
     util::{
         auth::Secret,
         toml_mut::{
-            dependency::{RegistrySource, Source, PathSource},
+            dependency::{PathSource, RegistrySource, Source},
             manifest::LocalManifest,
         },
     },
@@ -33,7 +33,7 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
 
     writeln!(stdout, "rewriting deps...")?;
 
-    for pkg in &plan.publish {
+    for pkg in &plan.crates {
         //let cra =  workspace.members_mut().find(|m| m.name() == pkg.name).unwrap();
         //cra.manifest_mut().summary_mut().map_dependencies(f)
 
@@ -56,8 +56,12 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
                         .iter()
                         .map(|s| s.to_string())
                         .collect::<Vec<_>>();
-                    let path = PathBuf::new();
-                    let source = PathSource::new(path).set_version(&dep.version);
+                    let path = apply.path.canonicalize()?.join(&dep.path);
+                    let mut source = PathSource::new(&path);
+
+                    if apply.local {
+                        source = source.set_version(&dep.version);
+                    }
                     let source = Source::Path(source);
                     let existing_dep = existing_dep.set_source(source);
                     manifest.insert_into_table(&table, &existing_dep)?;
@@ -68,7 +72,14 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
         manifest.write()?;
     }
 
-    for pkg in &plan.publish {
+    if apply.local {
+        return Ok(());
+    }
+
+    for pkg in &plan.crates {
+        if !pkg.publish {
+            continue;
+        }
         writeln!(stdout, "publishing {}-{}...", pkg.name, pkg.to)?;
 
         let opts = PublishOpts {

@@ -95,10 +95,11 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
         }
 
         let u = upstream.get(member.name().as_str()).unwrap();
-
-        if let Some(_) = u.versions.iter().find(|v| v.num == u.max_version) {
-            if !plan.all && !diff_crate(false, &config, member, &u.max_version)? {
-                continue;
+        if let Some(ref max_ver) = u.max_stable_version {
+            if let Some(_) = u.versions.iter().find(|v| &v.num == max_ver) {
+                if !plan.all && !diff_crate(false, &config, member, &max_ver)? {
+                    continue;
+                }
             }
         }
 
@@ -133,20 +134,27 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
     let mut new_versions = HashMap::new();
 
     for c in order {
+        let upstreamc = upstream.get(c).unwrap();
         let c = *workspace_crates.get(c).unwrap();
 
-        let from = c.version().clone();
-        let mut to = c.version().clone();
-        let vers = &upstream.get(c.name().as_str()).unwrap().versions;
+        let from =
+            semver::Version::parse(upstreamc.max_stable_version.as_deref().unwrap_or("0.0.0"))
+                .unwrap();
+        let mut to = from.clone();
         let mut rewrite = Vec::new();
-        let old_pre = take(&mut to.pre);
 
         to.minor += 1;
         to.patch = 0;
 
+        // if the version is already taken assume it's from a previous pre release and use this
+        // version instead of making a new release
+        if !upstreamc.versions.iter().any(|v| v.num == to.to_string()) && to.pre.is_empty() {
+            continue;
+        }
+
         // bump minor if version we want happens to already be taken
-        loop {
-            if !vers.iter().any(|v| v.num == to.to_string()) {
+        /*loop {
+            if !upstreamc.versions.iter().any(|v| v.num == to.to_string()) {
                 break;
             }
 
@@ -157,7 +165,7 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
             to.pre = Prerelease::new(pre)?;
         } else {
             to.pre = old_pre;
-        }
+        }*/
 
         new_versions.insert(c.name().to_string(), to.to_string());
 
@@ -207,8 +215,9 @@ fn rewrite_deps(
                     upstream
                         .get(dep.package_name().as_str())
                         .unwrap()
-                        .max_version
-                        .to_string()
+                        .max_stable_version
+                        .clone()
+                        .unwrap()
                 };
 
                 rewrite.push(RewriteDep {

@@ -36,6 +36,7 @@ pub struct Publish {
 pub struct RewriteDep {
     pub name: String,
     pub version: String,
+    pub path: PathBuf,
 }
 
 pub async fn handle_plan(plan: Plan) -> Result<()> {
@@ -187,7 +188,7 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
 
         new_versions.insert(c.name().to_string(), to.to_string());
 
-        rewrite_deps(c, &workspace_crates, &new_versions, &upstream, &mut rewrite);
+        rewrite_deps(&plan,c, &workspace_crates, &new_versions, &upstream, &mut rewrite)?;
 
         planner.publish.push(Publish {
             name: c.name().to_string(),
@@ -214,18 +215,19 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
 }
 
 fn rewrite_deps(
+    plan: &Plan,
     cra: &Package,
     workspace_crates: &HashMap<&str, &Package>,
     new_versions: &HashMap<String, String>,
     upstream: &HashMap<&str, crates_io_api::FullCrate>,
     rewrite: &mut Vec<RewriteDep>,
-) {
+) -> Result<()> {
     for dep in cra.dependencies() {
         if dep.kind() == DepKind::Development {
             continue;
         }
 
-        if workspace_crates.contains_key(dep.package_name().as_str()) {
+        if let Some(dep_crate) = workspace_crates.get(dep.package_name().as_str()) {
             if dep.source_id().is_git() || dep.source_id().is_path() {
                 let new_ver = if let Some(ver) = new_versions.get(dep.package_name().as_str()) {
                     ver.to_string()
@@ -238,11 +240,21 @@ fn rewrite_deps(
                         .unwrap()
                 };
 
+                let path = plan.path.canonicalize()?;
                 rewrite.push(RewriteDep {
                     name: dep.package_name().to_string(),
                     version: new_ver,
+                    path:
+                        dep_crate.manifest_path()
+                        .parent()
+                        .unwrap()
+                        .strip_prefix(path)
+                        .unwrap()
+                        .to_path_buf(),
                 })
             }
         }
     }
+
+    Ok(())
 }

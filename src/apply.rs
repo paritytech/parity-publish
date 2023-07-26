@@ -5,12 +5,12 @@ use cargo::{
     util::{
         auth::Secret,
         toml_mut::{
-            dependency::{RegistrySource, Source},
+            dependency::{RegistrySource, Source, PathSource},
             manifest::LocalManifest,
         },
     },
 };
-use std::{env, io::Write};
+use std::{env, io::Write, path::PathBuf};
 use termcolor::{ColorChoice, StandardStream};
 
 use crate::{cli::Apply, plan};
@@ -56,7 +56,9 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
                         .iter()
                         .map(|s| s.to_string())
                         .collect::<Vec<_>>();
-                    let source = Source::Registry(RegistrySource::new(&dep.version));
+                    let path = PathBuf::new();
+                    let source = PathSource::new(path).set_version(&dep.version);
+                    let source = Source::Path(source);
                     let existing_dep = existing_dep.set_source(source);
                     manifest.insert_into_table(&table, &existing_dep)?;
                 }

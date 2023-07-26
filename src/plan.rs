@@ -17,25 +17,25 @@ use crate::{
 };
 
 #[derive(serde::Serialize, serde::Deserialize, Default)]
-struct Planner {
-    publish: Vec<Publish>,
+pub struct Planner {
+    pub publish: Vec<Publish>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default)]
-struct Publish {
-    name: String,
-    from: String,
-    to: String,
-    bump: String,
-    reason: String,
-    path: PathBuf,
-    rewrite_dep: Vec<RewriteDep>,
+pub struct Publish {
+    pub name: String,
+    pub from: String,
+    pub to: String,
+    pub bump: String,
+    pub reason: String,
+    pub path: PathBuf,
+    pub rewrite_dep: Vec<RewriteDep>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default)]
-struct RewriteDep {
-    name: String,
-    version: String,
+pub struct RewriteDep {
+    pub name: String,
+    pub version: String,
 }
 
 pub async fn handle_plan(plan: Plan) -> Result<()> {
@@ -140,6 +140,9 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
         let vers = &upstream.get(c.name().as_str()).unwrap().versions;
         let mut rewrite = Vec::new();
         let old_pre = take(&mut to.pre);
+
+        to.minor += 1;
+        to.patch = 0;
 
         // bump minor if version we want happens to already be taken
         loop {

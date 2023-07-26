@@ -88,19 +88,12 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
 
     download_crates(&workspace, &upstream.values().cloned().collect::<Vec<_>>()).await?;
 
+    println!("calculating plan...");
+
     // map name to deps
     for member in workspace.members() {
         if member.publish().is_some() {
             continue;
-        }
-
-        let u = upstream.get(member.name().as_str()).unwrap();
-        if let Some(ref max_ver) = u.max_stable_version {
-            if let Some(_) = u.versions.iter().find(|v| &v.num == max_ver) {
-                if !plan.all && !diff_crate(false, &config, member, &max_ver)? {
-                    continue;
-                }
-            }
         }
 
         let deps_list = member
@@ -132,6 +125,9 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
 
     let mut planner = Planner::default();
     let mut new_versions = HashMap::new();
+    let mut breaking = HashSet::new();
+
+    println!("order: {}", order.len());
 
     for c in order {
         let upstreamc = upstream.get(c).unwrap();
@@ -143,13 +139,35 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
         let mut to = from.clone();
         let mut rewrite = Vec::new();
 
+        if let Some(ref pre) = plan.pre {
+        to.pre = Prerelease::new( pre).unwrap();
+        }
+
         to.minor += 1;
         to.patch = 0;
 
         // if the version is already taken assume it's from a previous pre release and use this
         // version instead of making a new release
         if !upstreamc.versions.iter().any(|v| v.num == to.to_string()) && to.pre.is_empty() {
+            println!("c");
             continue;
+        }
+
+        // we need to update the package even if nothing has changed if we're updating the deps in
+        // a breaking way.
+        let deps_breaking = c.dependencies().iter().any(|d| breaking.contains(d.package_name().as_str()));
+
+        if let Some(ref max_ver) = upstreamc.max_stable_version {
+            if let Some(_) = upstreamc.versions.iter().find(|v| &v.num == max_ver) {
+                if !deps_breaking && !plan.all && !diff_crate(false, &config, c, &max_ver)? {
+                    println!("b");
+                    continue;
+                }
+            }
+        }
+
+        if to.major == 0 {
+            breaking.insert(c.name().as_str());
         }
 
         // bump minor if version we want happens to already be taken

@@ -39,6 +39,7 @@ pub struct RewriteDep {
     pub name: String,
     pub version: String,
     pub path: PathBuf,
+    pub dev: bool,
 }
 
 pub async fn handle_plan(plan: Plan) -> Result<()> {
@@ -96,11 +97,7 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
 
     // map name to deps
     for member in workspace.members() {
-        let deps_list = member
-            .dependencies()
-            .iter()
-            .filter(|d| d.kind() != DepKind::Development)
-            .collect::<Vec<_>>();
+        let deps_list = member.dependencies().iter().collect::<Vec<_>>();
         deps.insert(member.name().as_str(), deps_list);
     }
 
@@ -245,10 +242,6 @@ fn rewrite_deps(
     rewrite: &mut Vec<RewriteDep>,
 ) -> Result<()> {
     for dep in cra.dependencies() {
-        if dep.kind() == DepKind::Development {
-            continue;
-        }
-
         if let Some(dep_crate) = workspace_crates.get(dep.package_name().as_str()) {
             if dep.source_id().is_git() || dep.source_id().is_path() {
                 let new_ver = if let Some(ver) = new_versions.get(dep.package_name().as_str()) {
@@ -259,11 +252,12 @@ fn rewrite_deps(
                         .unwrap()
                         .max_stable_version
                         .clone()
-                        .unwrap()
+                        .unwrap_or("0.0.0".to_string())
                 };
 
                 let path = plan.path.canonicalize()?;
                 rewrite.push(RewriteDep {
+                    dev: dep.kind() == DepKind::Development,
                     name: dep.package_name().to_string(),
                     version: new_ver,
                     path: dep_crate

@@ -46,6 +46,10 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
             let exisiting_deps = manifest
                 .get_dependency_versions(&dep.name)
                 .collect::<Vec<_>>();
+
+            if pkg.name == "sc-client-api" {
+                println!("{}, {:#?}", dep.name, exisiting_deps);
+            }
             for exisiting_dep in exisiting_deps {
                 let (table, exisiting_dep) = exisiting_dep;
                 let existing_dep = exisiting_dep?;
@@ -59,7 +63,7 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
                     let path = apply.path.canonicalize()?.join(&dep.path);
                     let mut source = PathSource::new(&path);
 
-                    if apply.local {
+                    if !apply.local && !dep.dev {
                         source = source.set_version(&dep.version);
                     }
                     let source = Source::Path(source);

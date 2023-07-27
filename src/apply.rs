@@ -1,19 +1,19 @@
 use anyhow::{Context, Result};
 use cargo::{
     core::{dependency::DepKind, resolver::CliFeatures, Workspace},
-    ops::{Packages, PublishOpts},
+    ops::{Packages, PublishOpts, CompileOptions},
     util::{
         auth::Secret,
         toml_mut::{
             dependency::{PathSource, RegistrySource, Source},
             manifest::LocalManifest,
-        },
+        }, command_prelude::CompileMode,
     },
 };
 use std::{env, io::Write, path::PathBuf};
 use termcolor::{ColorChoice, StandardStream};
 
-use crate::{cli::Apply, plan};
+use crate::{cli::Apply, plan, shared};
 
 pub async fn handle_apply(apply: Apply) -> Result<()> {
     let path = apply.path.canonicalize()?;
@@ -31,6 +31,8 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
     let token = env::var("PARITY_PUBLISH_CRATESIO_TOKEN")
         .context("PARITY_PUBLISH_CRATESIO_TOKEN must be set")?;
 
+    let cratesio = shared::cratesio()?;
+
     writeln!(stdout, "rewriting deps...")?;
 
     for pkg in &plan.crates {
@@ -47,14 +49,11 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
                 .get_dependency_versions(&dep.name)
                 .collect::<Vec<_>>();
 
-            if pkg.name == "sc-client-api" {
-                println!("{}, {:#?}", dep.name, exisiting_deps);
-            }
             for exisiting_dep in exisiting_deps {
                 let (table, exisiting_dep) = exisiting_dep;
-                let existing_dep = exisiting_dep?;
+                let mut existing_dep = exisiting_dep?;
 
-                if existing_dep.name == dep.name {
+                if existing_dep.toml_key() == dep.name {
                     let table = table
                         .to_table()
                         .iter()
@@ -63,10 +62,11 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
                     let path = apply.path.canonicalize()?.join(&dep.path);
                     let mut source = PathSource::new(&path);
 
-                    if !apply.local && !dep.dev {
+                    if !dep.dev {
                         source = source.set_version(&dep.version);
+                    } else {
+                        existing_dep = existing_dep.clear_version();
                     }
-                    let source = Source::Path(source);
                     let existing_dep = existing_dep.set_source(source);
                     manifest.insert_into_table(&table, &existing_dep)?;
                 }
@@ -84,6 +84,16 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
         if !pkg.publish {
             continue;
         }
+
+        let c = cratesio.get_crate(&pkg.name).await;
+        if let Ok(c) = c {
+            if c.versions.iter().any(|v| v.num == pkg.to) {
+                writeln!(stdout, "{}-{} already published", pkg.name, pkg.to)?;
+                continue;
+            }
+        }
+
+
         writeln!(stdout, "publishing {}-{}...", pkg.name, pkg.to)?;
 
         let opts = PublishOpts {

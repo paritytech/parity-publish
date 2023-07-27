@@ -97,7 +97,7 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
 
     // map name to deps
     for member in workspace.members() {
-        let deps_list = member.dependencies().iter().collect::<Vec<_>>();
+        let deps_list = member.dependencies().iter().filter(|d| d.kind() != DepKind::Development).collect::<Vec<_>>();
         deps.insert(member.name().as_str(), deps_list);
     }
 
@@ -258,7 +258,7 @@ fn rewrite_deps(
                 let path = plan.path.canonicalize()?;
                 rewrite.push(RewriteDep {
                     dev: dep.kind() == DepKind::Development,
-                    name: dep.package_name().to_string(),
+                    name: dep.name_in_toml().to_string(),
                     version: new_ver,
                     path: dep_crate
                         .manifest_path()

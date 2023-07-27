@@ -50,6 +50,12 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
         let ver = package.get_mut("version").unwrap();
         *ver = toml_edit::value(&pkg.to);
 
+
+        // hack because come crates don't have a desc
+        if package.get("description").is_none() {
+            package.as_table_mut().unwrap().insert("description", toml_edit::value(&pkg.name));
+        }
+
         for dep in &pkg.rewrite_dep {
             let exisiting_deps = manifest
                 .get_dependency_versions(&dep.name)

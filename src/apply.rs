@@ -54,6 +54,7 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
             for exisiting_dep in exisiting_deps {
                 let (table, exisiting_dep) = exisiting_dep;
                 let mut existing_dep = exisiting_dep?;
+                let dev = table.kind() == DepKind::Development;
 
                 if existing_dep.toml_key() == dep.name {
                     let table = table
@@ -64,10 +65,10 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
                     let path = apply.path.canonicalize()?.join(&dep.path);
                     let mut source = PathSource::new(&path);
 
-                    if !dep.dev {
-                        source = source.set_version(&dep.version);
-                    } else {
+                    if dev {
                         existing_dep = existing_dep.clear_version();
+                    } else {
+                        source = source.set_version(&dep.version);
                     }
                     let existing_dep = existing_dep.set_source(source);
                     manifest.insert_into_table(&table, &existing_dep)?;

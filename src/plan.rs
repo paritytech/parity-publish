@@ -41,7 +41,7 @@ pub struct RewriteDep {
     pub name: String,
     pub version: String,
     pub path: PathBuf,
-    pub dev: bool,
+    //pub dev: bool,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default)]
@@ -284,7 +284,7 @@ fn rewrite_deps(
 
                 let path = plan.path.canonicalize()?;
                 rewrite.push(RewriteDep {
-                    dev: dep.kind() == DepKind::Development,
+                    //dev: dep.kind() == DepKind::Development,
                     name: dep.name_in_toml().to_string(),
                     version: new_ver,
                     path: dep_crate

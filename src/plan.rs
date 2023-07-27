@@ -1,8 +1,9 @@
 use std::{
     collections::{HashMap, HashSet},
+    fs,
     io::Write,
     mem::take,
-    path::PathBuf, fs,
+    path::PathBuf,
 };
 
 use anyhow::{ensure, Result};
@@ -72,7 +73,7 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
     for package in workspace_crates.values() {
         let c = if let Some(c) = upstream.remove(package.name().as_str()) {
             c
-        } else if  let Ok(c) = cratesio.full_crate(package.name().as_str(), true).await {
+        } else if let Ok(c) = cratesio.full_crate(package.name().as_str(), true).await {
             c
         } else {
             continue;
@@ -116,7 +117,10 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
         deps.insert(member.name().as_str(), deps_list);
     }
 
-    let mut names = deps.keys().cloned().collect::<HashSet<_>>();
+    let mut names = workspace
+        .members()
+        .map(|c| c.name())
+        .collect::<HashSet<_>>();
 
     while !deps.is_empty() {
         // strip out deps that are not in the workspace
@@ -138,8 +142,6 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
     let mut planner = Planner::default();
     let mut new_versions = HashMap::new();
     let mut breaking = HashSet::new();
-
-    println!("order: {}", order.len());
 
     for c in order {
         let mut publish = true;

@@ -110,15 +110,17 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
         };
         cargo::ops::publish(&workspace, &opts)?;
 
-        for _ in 0..100 {
-            writeln!(
-                stdout,
-                "waiting for {}-{} to become avaliable...",
-                pkg.name, pkg.to
-            )?;
-            thread::sleep(Duration::from_secs(10));
-            if version_exists(&cratesio, &pkg.name, &pkg.to).await {
-                break;
+        if !apply.dry_run {
+            for _ in 0..100 {
+                writeln!(
+                    stdout,
+                    "waiting for {}-{} to become avaliable...",
+                    pkg.name, pkg.to
+                )?;
+                thread::sleep(Duration::from_secs(10));
+                if version_exists(&cratesio, &pkg.name, &pkg.to).await {
+                    break;
+                }
             }
         }
     }

@@ -75,6 +75,16 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
             }
         }
 
+        for remove_feature in &pkg.remove_feature {
+            let features = manifest.manifest.get_table_mut(&["features".to_string()])?;
+            for feature in features.as_table_mut().unwrap().iter_mut() {
+                if feature.0 == remove_feature.feature {
+                    let needs = feature.1.as_array_mut().unwrap();
+                    needs.retain(|need| need.as_str().unwrap() != remove_feature.value);
+                }
+            }
+        }
+
         manifest.write()?;
     }
 

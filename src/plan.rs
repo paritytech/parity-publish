@@ -7,7 +7,7 @@ use std::{
 };
 
 use anyhow::{ensure, Result};
-use cargo::core::{dependency::DepKind, Package, Workspace};
+use cargo::core::{dependency::DepKind, FeatureValue, Package, Workspace};
 use semver::Prerelease;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
@@ -33,6 +33,7 @@ pub struct Publish {
     pub reason: String,
     pub path: PathBuf,
     pub rewrite_dep: Vec<RewriteDep>,
+    pub remove_feature: Vec<RemoveFeature>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default)]
@@ -41,6 +42,12 @@ pub struct RewriteDep {
     pub version: String,
     pub path: PathBuf,
     pub dev: bool,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Default)]
+pub struct RemoveFeature {
+    pub feature: String,
+    pub value: String,
 }
 
 pub async fn handle_plan(plan: Plan) -> Result<()> {
@@ -225,6 +232,8 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
             &mut rewrite,
         )?;
 
+        let remove = remove_features(&c);
+
         planner.crates.push(Publish {
             publish,
             name: c.name().to_string(),
@@ -240,6 +249,7 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
                 .strip_prefix(path.parent().unwrap())
                 .unwrap()
                 .to_path_buf(),
+            remove_feature: remove,
         });
     }
 
@@ -290,4 +300,45 @@ fn rewrite_deps(
     }
 
     Ok(())
+}
+
+fn remove_features(member: &Package) -> Vec<RemoveFeature> {
+    let mut remove = Vec::new();
+    let mut dev = HashSet::new();
+    let mut non_dev = HashSet::new();
+
+    for dep in member.dependencies() {
+        if dep.kind() == DepKind::Development {
+            dev.insert(dep.name_in_toml());
+        } else {
+            non_dev.insert(dep.name_in_toml());
+        }
+    }
+
+    for feature in non_dev {
+        dev.remove(&feature);
+    }
+
+    for (feature, needs) in member.summary().features() {
+        for need in needs {
+            let dep_name = match need {
+                FeatureValue::Feature(_) => continue,
+                FeatureValue::Dep { dep_name } => dep_name.as_str(),
+                FeatureValue::DepFeature {
+                    dep_name,
+                    dep_feature,
+                    weak,
+                } => dep_name.as_str(),
+            };
+
+            if dev.contains(dep_name) {
+                remove.push(RemoveFeature {
+                    feature: feature.to_string(),
+                    value: need.to_string(),
+                });
+            }
+        }
+    }
+
+    remove
 }

@@ -12,6 +12,8 @@ use cargo::{
     },
 };
 use crates_io_api::AsyncClient;
+use toml::Value;
+use toml_edit::Item;
 use std::{env, io::Write, path::PathBuf, thread, time::Duration};
 use termcolor::{ColorChoice, StandardStream};
 
@@ -19,6 +21,8 @@ use crate::{cli::Apply, plan, shared};
 
 pub async fn handle_apply(apply: Apply) -> Result<()> {
     let path = apply.path.canonicalize()?;
+    env::set_current_dir(&path)?;
+
     let plan = std::fs::read_to_string(apply.path.join("Plan.toml"))
         .context("Can't find Plan.toml. Have your ran plan first?")?;
     let plan: plan::Planner = toml::from_str(&plan)?;
@@ -92,6 +96,9 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
     if apply.local {
         return Ok(());
     }
+
+    drop(workspace);
+    let workspace = Workspace::new(&path.join("Cargo.toml"), &config)?;
 
     for pkg in &plan.crates {
         if !pkg.publish {

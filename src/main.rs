@@ -8,6 +8,7 @@ mod cli;
 mod plan;
 mod shared;
 mod status;
+mod check;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -19,5 +20,6 @@ async fn main() -> Result<()> {
         cli::Command::Changed(changed) => changed::handle_changed(changed).await,
         cli::Command::Plan(plan) => plan::handle_plan(plan).await,
         cli::Command::Apply(apply) => apply::handle_apply(apply).await,
+        cli::Command::Check(check) => check::handle_check(check).await,
     }
 }

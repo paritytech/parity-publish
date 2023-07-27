@@ -16,9 +16,14 @@ pub enum Command {
     Status(Status),
     /// Claim ownership of unpublished crates on crates.io
     Claim(Claim),
+    /// Find what crates have changed since last crates.io release
     Changed(Changed),
+    /// Plan a publish
     Plan(Plan),
+    /// Execute a publish
     Apply(Apply),
+    /// Check crates are okay to publish
+    Check(Check),
 }
 
 #[derive(Parser, Debug)]
@@ -92,4 +97,12 @@ pub struct Apply {
     #[arg(default_value = ".")]
     /// Path to the cargo workspace
     pub path: PathBuf,
+}
+
+#[derive(Parser, Debug)]
+pub struct Check {
+    #[arg(default_value = ".")]
+    /// Path to the cargo workspace
+    pub path: PathBuf,
+
 }

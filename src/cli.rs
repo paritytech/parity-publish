@@ -64,6 +64,12 @@ pub struct Changed {
 
 #[derive(Parser, Debug)]
 pub struct Plan {
+    /// Cache crates.io info
+    #[arg(long, short)]
+    pub cache: bool,
+    /// Refresh the cache
+    #[arg(long, short)]
+    pub refresh: bool,
     /// add a pre release part to the published version
     #[arg(long, short)]
     pub pre: Option<String>,

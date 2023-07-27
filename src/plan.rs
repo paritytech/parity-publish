@@ -2,7 +2,7 @@ use std::{
     collections::{HashMap, HashSet},
     io::Write,
     mem::take,
-    path::PathBuf,
+    path::PathBuf, fs,
 };
 
 use anyhow::{ensure, Result};
@@ -64,8 +64,15 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
 
     writeln!(stdout, "looking up crates...",)?;
 
+    let cache_path = plan.path.join(&"Plan.cache");
+    if plan.cache && cache_path.exists() && !plan.refresh {
+        upstream = toml::from_str(&fs::read_to_string(&cache_path)?)?;
+    }
+
     for package in workspace_crates.values() {
-        let c = if let Ok(c) = cratesio.full_crate(package.name().as_str(), true).await {
+        let c = if let Some(c) = upstream.remove(package.name().as_str()) {
+            c
+        } else if  let Ok(c) = cratesio.full_crate(package.name().as_str(), true).await {
             c
         } else {
             continue;
@@ -85,8 +92,12 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
             )?;
             stdout.set_color(ColorSpec::new().set_fg(None))?;
         }
-        upstream.insert(package.name().as_str(), c);
+        upstream.insert(package.name().to_string(), c);
         own_all &= parity_own;
+    }
+
+    if plan.cache {
+        fs::write(&cache_path, toml::to_string_pretty(&upstream)?)?;
     }
 
     ensure!(own_all, "we do not own all crates in the workspace");
@@ -242,7 +253,7 @@ fn rewrite_deps(
     cra: &Package,
     workspace_crates: &HashMap<&str, &Package>,
     new_versions: &HashMap<String, String>,
-    upstream: &HashMap<&str, crates_io_api::FullCrate>,
+    upstream: &HashMap<String, crates_io_api::FullCrate>,
     rewrite: &mut Vec<RewriteDep>,
 ) -> Result<()> {
     for dep in cra.dependencies() {

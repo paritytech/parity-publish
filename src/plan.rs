@@ -97,7 +97,11 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
 
     // map name to deps
     for member in workspace.members() {
-        let deps_list = member.dependencies().iter().filter(|d| d.kind() != DepKind::Development).collect::<Vec<_>>();
+        let deps_list = member
+            .dependencies()
+            .iter()
+            .filter(|d| d.kind() != DepKind::Development)
+            .collect::<Vec<_>>();
         deps.insert(member.name().as_str(), deps_list);
     }
 

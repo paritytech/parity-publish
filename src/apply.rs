@@ -1,16 +1,18 @@
 use anyhow::{Context, Result};
 use cargo::{
     core::{dependency::DepKind, resolver::CliFeatures, Workspace},
-    ops::{Packages, PublishOpts, CompileOptions},
+    ops::{CompileOptions, Packages, PublishOpts},
     util::{
         auth::Secret,
+        command_prelude::CompileMode,
         toml_mut::{
             dependency::{PathSource, RegistrySource, Source},
             manifest::LocalManifest,
-        }, command_prelude::CompileMode,
+        },
     },
 };
-use std::{env, io::Write, path::PathBuf};
+use crates_io_api::AsyncClient;
+use std::{env, io::Write, path::PathBuf, thread, time::Duration};
 use termcolor::{ColorChoice, StandardStream};
 
 use crate::{cli::Apply, plan, shared};
@@ -85,14 +87,10 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
             continue;
         }
 
-        let c = cratesio.get_crate(&pkg.name).await;
-        if let Ok(c) = c {
-            if c.versions.iter().any(|v| v.num == pkg.to) {
-                writeln!(stdout, "{}-{} already published", pkg.name, pkg.to)?;
-                continue;
-            }
+        if version_exists(&cratesio, &pkg.name, &pkg.to).await {
+            writeln!(stdout, "{}-{} already published", pkg.name, pkg.to)?;
+            continue;
         }
-
 
         writeln!(stdout, "publishing {}-{}...", pkg.name, pkg.to)?;
 
@@ -111,7 +109,30 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
             cli_features: CliFeatures::new_all(false),
         };
         cargo::ops::publish(&workspace, &opts)?;
+
+        for _ in 0..100 {
+            writeln!(
+                stdout,
+                "waiting for {}-{} to become avaliable...",
+                pkg.name, pkg.to
+            )?;
+            thread::sleep(Duration::from_secs(10));
+            if version_exists(&cratesio, &pkg.name, &pkg.to).await {
+                break;
+            }
+        }
     }
 
     Ok(())
+}
+
+async fn version_exists(cratesio: &AsyncClient, name: &str, ver: &str) -> bool {
+    let c = cratesio.get_crate(name).await;
+    if let Ok(c) = c {
+        if c.versions.iter().any(|v| v.num == ver) {
+            return true;
+        }
+    }
+
+    false
 }

@@ -10,6 +10,7 @@ license = "Apache-2.0"
 [dependencies]
 anyhow = "1.0.71"
 cargo = "0.71.0"
+cargo-semver-checks = "0.22.1"
 clap = { version = "4.3.3", features = ["derive"] }
 crates_io_api = "0.8.1"
 reqwest = "0.11.18"

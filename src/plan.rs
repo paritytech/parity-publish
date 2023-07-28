@@ -6,8 +6,9 @@ use std::{
     path::PathBuf,
 };
 
-use anyhow::{ensure, Result};
+use anyhow::{ensure, Context, Result};
 use cargo::core::{dependency::DepKind, FeatureValue, Package, Workspace};
+use crates_io_api::AsyncClient;
 use semver::Prerelease;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
@@ -41,7 +42,7 @@ pub struct Publish {
 pub struct RewriteDep {
     pub name: String,
     pub version: String,
-    pub path: PathBuf,
+    pub path: Option<PathBuf>,
     //pub dev: bool,
 }
 
@@ -226,12 +227,14 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
 
         rewrite_deps(
             &plan,
+            &cratesio,
             c,
             &workspace_crates,
             &new_versions,
             &upstream,
             &mut rewrite,
-        )?;
+        )
+        .await?;
 
         let remove = remove_features(&c);
 
@@ -262,8 +265,9 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
     Ok(())
 }
 
-fn rewrite_deps(
+async fn rewrite_deps(
     plan: &Plan,
+    cratesio: &AsyncClient,
     cra: &Package,
     workspace_crates: &HashMap<&str, &Package>,
     new_versions: &HashMap<String, String>,
@@ -271,8 +275,8 @@ fn rewrite_deps(
     rewrite: &mut Vec<RewriteDep>,
 ) -> Result<()> {
     for dep in cra.dependencies() {
-        if let Some(dep_crate) = workspace_crates.get(dep.package_name().as_str()) {
-            if dep.source_id().is_git() || dep.source_id().is_path() {
+        if dep.source_id().is_git() || dep.source_id().is_path() {
+            if let Some(dep_crate) = workspace_crates.get(dep.package_name().as_str()) {
                 let new_ver = if let Some(ver) = new_versions.get(dep.package_name().as_str()) {
                     ver.to_string()
                 } else {
@@ -286,17 +290,34 @@ fn rewrite_deps(
 
                 let path = plan.path.canonicalize()?;
                 rewrite.push(RewriteDep {
-                    //dev: dep.kind() == DepKind::Development,
                     name: dep.name_in_toml().to_string(),
                     version: new_ver,
-                    path: dep_crate
-                        .manifest_path()
-                        .parent()
-                        .unwrap()
-                        .strip_prefix(path)
-                        .unwrap()
-                        .to_path_buf(),
+                    path: Some(
+                        dep_crate
+                            .manifest_path()
+                            .parent()
+                            .unwrap()
+                            .strip_prefix(path)
+                            .unwrap()
+                            .to_path_buf(),
+                    ),
                 })
+            } else {
+                if let Ok(u) = cratesio.full_crate(dep.package_name().as_str(), true).await {
+                    let new_ver = if plan.pre.is_some() {
+                        u.max_version
+                    } else {
+                        u.max_stable_version.with_context(|| {
+                            format!("crate {} does not have a release", dep.package_name())
+                        })?
+                    };
+
+                    rewrite.push(RewriteDep {
+                        name: dep.name_in_toml().to_string(),
+                        version: new_ver,
+                        path: None,
+                    })
+                }
             }
         }
     }

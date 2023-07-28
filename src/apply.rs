@@ -74,16 +74,23 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
                         .iter()
                         .map(|s| s.to_string())
                         .collect::<Vec<_>>();
-                    let path = apply.path.canonicalize()?.join(&dep.path);
-                    let mut source = PathSource::new(&path);
 
-                    if dev {
-                        existing_dep = existing_dep.clear_version();
+                    if let Some(path) = &dep.path {
+                        let path = apply.path.canonicalize()?.join(&path);
+                        let mut source = PathSource::new(&path);
+
+                        if dev {
+                            existing_dep = existing_dep.clear_version();
+                        } else {
+                            source = source.set_version(&dep.version);
+                        }
+                        let existing_dep = existing_dep.set_source(source);
+                        manifest.insert_into_table(&table, &existing_dep)?;
                     } else {
-                        source = source.set_version(&dep.version);
+                        let source = RegistrySource::new(&dep.version);
+                        let existing_dep = existing_dep.set_source(source);
+                        manifest.insert_into_table(&table, &existing_dep)?;
                     }
-                    let existing_dep = existing_dep.set_source(source);
-                    manifest.insert_into_table(&table, &existing_dep)?;
                 }
             }
         }

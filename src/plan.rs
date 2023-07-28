@@ -34,6 +34,7 @@ pub struct Publish {
     pub path: PathBuf,
     pub rewrite_dep: Vec<RewriteDep>,
     pub remove_feature: Vec<RemoveFeature>,
+    pub verify: bool,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default)]
@@ -250,6 +251,7 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
                 .unwrap()
                 .to_path_buf(),
             remove_feature: remove,
+            verify: true,
         });
     }
 

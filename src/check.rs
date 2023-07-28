@@ -2,9 +2,9 @@ use crate::{cli::Check, plan};
 
 use std::io::Write;
 
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use cargo::core::Workspace;
-use termcolor::{StandardStream, ColorChoice};
+use termcolor::{ColorChoice, StandardStream};
 
 pub async fn handle_check(check: Check) -> Result<()> {
     let path = check.path.canonicalize()?;

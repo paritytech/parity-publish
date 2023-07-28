@@ -104,5 +104,4 @@ pub struct Check {
     #[arg(default_value = ".")]
     /// Path to the cargo workspace
     pub path: PathBuf,
-
 }

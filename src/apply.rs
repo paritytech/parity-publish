@@ -12,10 +12,10 @@ use cargo::{
     },
 };
 use crates_io_api::AsyncClient;
-use toml::Value;
-use toml_edit::Item;
 use std::{env, io::Write, path::PathBuf, thread, time::Duration};
 use termcolor::{ColorChoice, StandardStream};
+use toml::Value;
+use toml_edit::Item;
 
 use crate::{cli::Apply, plan, shared};
 
@@ -50,10 +50,12 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
         let ver = package.get_mut("version").unwrap();
         *ver = toml_edit::value(&pkg.to);
 
-
         // hack because come crates don't have a desc
         if package.get("description").is_none() {
-            package.as_table_mut().unwrap().insert("description", toml_edit::value(&pkg.name));
+            package
+                .as_table_mut()
+                .unwrap()
+                .insert("description", toml_edit::value(&pkg.name));
         }
 
         for dep in &pkg.rewrite_dep {
@@ -122,7 +124,7 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
             config: &config,
             token: Some(Secret::from(token.clone())),
             index: None,
-            verify: true,
+            verify: pkg.verify,
             allow_dirty: true,
             jobs: None,
             keep_going: false,
@@ -133,20 +135,6 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
             cli_features: CliFeatures::new_all(false),
         };
         cargo::ops::publish(&workspace, &opts)?;
-
-        if !apply.dry_run {
-            for _ in 0..100 {
-                writeln!(
-                    stdout,
-                    "waiting for {}-{} to become avaliable...",
-                    pkg.name, pkg.to
-                )?;
-                thread::sleep(Duration::from_secs(10));
-                if version_exists(&cratesio, &pkg.name, &pkg.to).await {
-                    break;
-                }
-            }
-        }
     }
 
     Ok(())

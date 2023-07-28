@@ -3,12 +3,12 @@ use clap::Parser;
 
 mod apply;
 mod changed;
+mod check;
 mod claim;
 mod cli;
 mod plan;
 mod shared;
 mod status;
-mod check;
 
 #[tokio::main]
 async fn main() -> Result<()> {

@@ -114,7 +114,7 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
 
     download_crates(&workspace, &upstream.values().cloned().collect::<Vec<_>>()).await?;
 
-    println!("calculating plan...");
+    writeln!(stdout, "calculating order...")?;
 
     // map name to deps
     for member in workspace.members() {
@@ -147,6 +147,8 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
             }
         });
     }
+
+    writeln!(stdout, "calculating plan...")?;
 
     let mut planner = Planner::default();
     let mut new_versions = HashMap::new();
@@ -231,7 +233,7 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
             c,
             &workspace_crates,
             &new_versions,
-            &upstream,
+            &mut upstream,
             &mut rewrite,
         )
         .await?;
@@ -258,6 +260,10 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
         });
     }
 
+    if plan.cache {
+        fs::write(&cache_path, toml::to_string_pretty(&upstream)?)?;
+    }
+
     let output = toml::to_string_pretty(&planner)?;
     std::fs::write(plan.path.join("Plan.toml"), &output)?;
     writeln!(stdout, "plan generated")?;
@@ -271,9 +277,11 @@ async fn rewrite_deps(
     cra: &Package,
     workspace_crates: &HashMap<&str, &Package>,
     new_versions: &HashMap<String, String>,
-    upstream: &HashMap<String, crates_io_api::FullCrate>,
+    upstream: &mut HashMap<String, crates_io_api::FullCrate>,
     rewrite: &mut Vec<RewriteDep>,
 ) -> Result<()> {
+    let mut stdout = StandardStream::stdout(ColorChoice::Auto);
+
     for dep in cra.dependencies() {
         if dep.source_id().is_git() || dep.source_id().is_path() {
             if let Some(dep_crate) = workspace_crates.get(dep.package_name().as_str()) {
@@ -303,11 +311,27 @@ async fn rewrite_deps(
                     ),
                 })
             } else {
-                if let Ok(u) = cratesio.full_crate(dep.package_name().as_str(), true).await {
-                    let new_ver = if plan.pre.is_some() {
-                        u.max_version
+                let u = if let Some(u) = upstream.get(&dep.package_name().to_string()) {
+                    Some(u)
+                } else {
+                    writeln!(stdout, "looking up {}...", dep.package_name())?;
+                    let u = cratesio
+                        .full_crate(dep.package_name().as_str(), true)
+                        .await
+                        .ok();
+                    if let Some(u) = u {
+                        upstream.insert(dep.package_name().to_string(), u);
+                        upstream.get(dep.package_name().as_str())
                     } else {
-                        u.max_stable_version.with_context(|| {
+                        None
+                    }
+                };
+
+                if let Some(u) = u {
+                    let new_ver = if plan.pre.is_some() {
+                        u.max_version.clone()
+                    } else {
+                        u.max_stable_version.clone().with_context(|| {
                             format!("crate {} does not have a release", dep.package_name())
                         })?
                     };
@@ -316,7 +340,7 @@ async fn rewrite_deps(
                         name: dep.name_in_toml().to_string(),
                         version: new_ver,
                         path: None,
-                    })
+                    });
                 }
             }
         }

@@ -131,7 +131,7 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
             config: &config,
             token: Some(Secret::from(token.clone())),
             index: None,
-            verify: pkg.verify,
+            verify: pkg.verify && !apply.dry_run,
             allow_dirty: true,
             jobs: None,
             keep_going: false,

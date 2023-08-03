@@ -81,6 +81,9 @@ pub struct Plan {
     /// publish all crates even if they have not Changed
     #[arg(long, short)]
     pub all: bool,
+    /// don't verify before publishing
+    #[arg(long, short)]
+    pub no_verify: bool,
     #[arg(default_value = ".")]
     /// Path to the cargo workspace
     pub path: PathBuf,

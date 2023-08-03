@@ -256,7 +256,7 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
                 .unwrap()
                 .to_path_buf(),
             remove_feature: remove,
-            verify: true,
+            verify: !plan.no_verify,
         });
     }
 

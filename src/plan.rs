@@ -328,6 +328,10 @@ async fn rewrite_deps(
                 };
 
                 if let Some(u) = u {
+                    if u.versions.iter().all(|v| v.yanked) {
+                        continue;
+                    }
+
                     let new_ver = if plan.pre.is_some() {
                         u.max_version.clone()
                     } else {

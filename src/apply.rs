@@ -115,17 +115,31 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
     drop(workspace);
     let workspace = Workspace::new(&path.join("Cargo.toml"), &config)?;
 
-    for pkg in &plan.crates {
+    for (n, pkg) in plan.crates.iter().enumerate() {
         if !pkg.publish {
             continue;
         }
 
         if version_exists(&cratesio, &pkg.name, &pkg.to).await {
-            writeln!(stdout, "{}-{} already published", pkg.name, pkg.to)?;
+            writeln!(
+                stdout,
+                "({:<}/{:<}) {}-{} already published",
+                n,
+                plan.crates.len(),
+                pkg.name,
+                pkg.to
+            )?;
             continue;
         }
 
-        writeln!(stdout, "publishing {}-{}...", pkg.name, pkg.to)?;
+        writeln!(
+            stdout,
+            "({:<}/{:<}) publishing {}-{}...",
+            n,
+            plan.crates.len(),
+            pkg.name,
+            pkg.to
+        )?;
 
         let opts = PublishOpts {
             config: &config,
@@ -142,6 +156,7 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
             cli_features: CliFeatures::new_all(false),
         };
         cargo::ops::publish(&workspace, &opts)?;
+        thread::sleep(Duration::from_secs(60));
     }
 
     Ok(())

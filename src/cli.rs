@@ -84,6 +84,9 @@ pub struct Plan {
     /// don't verify before publishing
     #[arg(long, short)]
     pub no_verify: bool,
+    /// Use exact version for deps instead of semver
+    #[arg(long, short)]
+    pub exact: bool,
     #[arg(default_value = ".")]
     /// Path to the cargo workspace
     pub path: PathBuf,

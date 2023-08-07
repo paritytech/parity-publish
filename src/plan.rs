@@ -295,7 +295,7 @@ async fn rewrite_deps(
         if dep.source_id().is_git() || dep.source_id().is_path() {
             if let Some(dep_crate) = workspace_crates.get(dep.package_name().as_str()) {
                 let new_ver = if let Some(ver) = new_versions.get(dep.package_name().as_str()) {
-                    if plan.pre.is_some() {
+                    if plan.exact {
                         format!("={}", ver)
                     } else {
                         ver.to_string()
@@ -345,7 +345,7 @@ async fn rewrite_deps(
                         continue;
                     }
 
-                    let new_ver = if plan.pre.is_some() {
+                    let new_ver = if plan.exact {
                         format!("={}", u.max_version)
                     } else {
                         u.max_stable_version.clone().with_context(|| {

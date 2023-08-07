@@ -171,12 +171,21 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
         let mut to = from.clone();
         let mut rewrite = Vec::new();
 
+        to.pre = Prerelease::EMPTY;
+
         if let Some(ref pre) = plan.pre {
             to.pre = Prerelease::new(pre).unwrap();
         }
 
-        to.minor += 1;
-        to.patch = 0;
+        if to.major == 0 {
+            to.minor += 1;
+            to.patch = 0;
+        } else {
+            to.major += 1;
+            to.minor = 0;
+            to.patch = 0;
+
+        }
 
         // if the version is already taken assume it's from a previous pre release and use this
         // version instead of making a new release

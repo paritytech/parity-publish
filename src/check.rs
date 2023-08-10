@@ -1,6 +1,6 @@
 use crate::cli::Check;
 
-use std::io::Write;
+use std::{io::Write, process::exit};
 
 use anyhow::Result;
 use cargo::core::Workspace;
@@ -8,6 +8,7 @@ use termcolor::{ColorChoice, StandardStream};
 
 pub async fn handle_check(check: Check) -> Result<()> {
     let path = check.path.canonicalize()?;
+    let mut ret = 0;
 
     let mut stdout = StandardStream::stdout(ColorChoice::Auto);
 
@@ -22,12 +23,14 @@ pub async fn handle_check(check: Check) -> Result<()> {
 
         if c.manifest().metadata().description.is_none() {
             writeln!(stdout, "{} has no description", c.name())?;
+            ret = 1
         }
 
         if c.manifest().metadata().license.is_none() {
             writeln!(stdout, "{} has no license", c.name())?;
+            ret = 1;
         }
     }
 
-    Ok(())
+    exit(ret)
 }

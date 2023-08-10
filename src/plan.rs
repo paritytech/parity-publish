@@ -9,7 +9,7 @@ use std::{
 use anyhow::{ensure, Context, Result};
 use cargo::core::{dependency::DepKind, FeatureValue, Package, Workspace};
 use crates_io_api::AsyncClient;
-use semver::Prerelease;
+use semver::{BuildMetadata, Prerelease};
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 use crate::{
@@ -152,7 +152,7 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
 
     let mut planner = Planner::default();
     let mut new_versions = HashMap::new();
-    let mut breaking = HashSet::new();
+    let mut breaking: HashSet<String> = HashSet::new();
 
     for c in order {
         let mut publish = true;
@@ -167,40 +167,23 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
             publish = false;
         }
 
+        // if the version is already taken assume it's from a previous pre release and use this
+        // version instead of making a new release
+        if let Some(upstreamc) = upstreamc {
+            //if upstreamc.versions.iter().any(|v| v.num == to.to_string()) && !to.pre.is_empty() {
+            //publish = false;
+            //}
+        }
+
         let from = semver::Version::parse(&upstream_version).unwrap();
         let mut to = from.clone();
         let mut rewrite = Vec::new();
 
-        to.pre = Prerelease::EMPTY;
-
-        if let Some(ref pre) = plan.pre {
-            to.pre = Prerelease::new(pre).unwrap();
-        }
-
-        if to.major == 0 {
-            to.minor += 1;
-            to.patch = 0;
-        } else {
-            to.major += 1;
-            to.minor = 0;
-            to.patch = 0;
-
-        }
-
-        // if the version is already taken assume it's from a previous pre release and use this
-        // version instead of making a new release
-        if let Some(upstreamc) = upstreamc {
-            if !upstreamc.versions.iter().any(|v| v.num == to.to_string()) && to.pre.is_empty() {
-                publish = false;
-            }
-        }
-
-        // we need to update the package even if nothing has changed if we're updating the deps in
-        // a breaking way.
-        let deps_breaking = c
-            .dependencies()
-            .iter()
-            .any(|d| breaking.contains(d.package_name().as_str()));
+        // support also setting a version via Cargo.toml
+        //
+        // if the version in Cargo.toml is > than the last crates.io release we should use it.
+        // if the version in Cargo.timl is > but still compatible we should major bump it to be
+        // safe
 
         if let Some(upstreamc) = upstreamc {
             if let Some(_) = upstreamc
@@ -208,15 +191,50 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
                 .iter()
                 .find(|v| v.num == upstream_version)
             {
-                if !deps_breaking && !plan.all && !diff_crate(false, &config, c, &upstream_version)?
-                {
+                if publish && !plan.all && !diff_crate(false, &config, c, &upstream_version)? {
                     publish = false;
                 }
             }
         }
 
-        if to.major == 0 {
-            breaking.insert(c.name().as_str());
+        if publish {
+            if c.version() > &from {
+                let mut v = c.version().clone();
+                v.pre = Prerelease::EMPTY;
+                to = v;
+            }
+
+            let compatible = if to.major != 0 {
+                to.major == from.major
+            } else {
+                to.minor == from.minor
+            };
+
+            if compatible {
+                to.pre = Prerelease::EMPTY;
+
+                if let Some(ref pre) = plan.pre {
+                    to.pre = Prerelease::new(pre).unwrap();
+                }
+
+                if to.major == 0 {
+                    to.minor += 1;
+                    to.patch = 0;
+                } else {
+                    to.major += 1;
+                    to.minor = 0;
+                    to.patch = 0;
+                }
+            }
+
+            to.build = BuildMetadata::EMPTY;
+
+            // we need to update the package even if nothing has changed if we're updating the deps in
+            // a breaking way.
+            let deps_breaking = c
+                .dependencies()
+                .iter()
+                .any(|d| breaking.contains(d.package_name().as_str()));
         }
 
         // bump minor if version we want happens to already be taken

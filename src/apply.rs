@@ -38,9 +38,6 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
     writeln!(stdout, "rewriting deps...")?;
 
     for pkg in &plan.crates {
-        //let cra =  workspace.members_mut().find(|m| m.name() == pkg.name).unwrap();
-        //cra.manifest_mut().summary_mut().map_dependencies(f)
-
         let mut manifest = LocalManifest::try_new(&path.join(&pkg.path).join("Cargo.toml"))?;
         let package = manifest.manifest.get_table_mut(&["package".to_string()])?;
         let ver = package.get_mut("version").unwrap();
@@ -111,6 +108,8 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
     drop(workspace);
     let workspace = Workspace::new(&path.join("Cargo.toml"), &config)?;
 
+    let total = plan.crates.iter().filter(|c| c.publish).count();
+
     for (n, pkg) in plan.crates.iter().enumerate() {
         if !pkg.publish {
             continue;
@@ -119,22 +118,16 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
         if version_exists(&cratesio, &pkg.name, &pkg.to).await {
             writeln!(
                 stdout,
-                "({:<}/{:<}) {}-{} already published",
-                n,
-                plan.crates.len(),
-                pkg.name,
-                pkg.to
+                "({:3<}/{:3<}) {}-{} already published",
+                n, total, pkg.name, pkg.to
             )?;
             continue;
         }
 
         writeln!(
             stdout,
-            "({:<}/{:<}) publishing {}-{}...",
-            n,
-            plan.crates.len(),
-            pkg.name,
-            pkg.to
+            "({:3<}/{:3<}) publishing {}-{}...",
+            n, total, pkg.name, pkg.to
         )?;
 
         let opts = PublishOpts {

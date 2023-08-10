@@ -6,9 +6,12 @@ use std::{
 };
 
 use anyhow::{ensure, Context, Result};
-use cargo::core::{dependency::DepKind, FeatureValue, Package, Workspace};
-use crates_io_api::AsyncClient;
-use semver::{BuildMetadata, Prerelease};
+use cargo::{
+    core::{dependency::DepKind, FeatureValue, Package, Workspace},
+    Config,
+};
+use crates_io_api::{AsyncClient, FullCrate};
+use semver::{BuildMetadata, Prerelease, Version};
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 use crate::{
@@ -107,6 +110,7 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
     if plan.cache {
         fs::write(&cache_path, toml::to_string_pretty(&upstream)?)?;
     }
+    //new_versions.insert(c.name().to_string(), to.to_string());
 
     ensure!(own_all, "we do not own all crates in the workspace");
 
@@ -153,21 +157,13 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
     let mut breaking: HashSet<String> = HashSet::new();
 
     for c in order {
-        let mut publish = true;
-
         let upstreamc = upstream.get(c);
-        let upstream_version = upstreamc
-            .and_then(|c| c.max_stable_version.clone())
-            .unwrap_or("0.0.0".to_string());
         let c = *workspace_crates.get(c).unwrap();
-
-        if c.publish().is_some() {
-            publish = false;
-        }
-
-        let from = semver::Version::parse(&upstream_version).unwrap();
-        let mut to = from.clone();
         let mut rewrite = Vec::new();
+
+        let mut publish = is_publish(&config, &plan, upstreamc, c, &breaking)?;
+
+        let (from, to) = get_versions(&config, &plan, upstreamc, c, publish, &mut breaking)?;
 
         // if the version is already taken assume it's from a previous pre release and use this
         // version instead of making a new release
@@ -176,79 +172,6 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
                 publish = false;
             }
         }
-
-        // support also setting a version via Cargo.toml
-        //
-        // if the version in Cargo.toml is > than the last crates.io release we should use it.
-        // if the version in Cargo.timl is > but still compatible we should major bump it to be
-        // safe
-
-        if let Some(upstreamc) = upstreamc {
-            if let Some(_) = upstreamc
-                .versions
-                .iter()
-                .find(|v| v.num == upstream_version)
-            {
-                if publish && !plan.all && !diff_crate(false, &config, c, &upstream_version)? {
-                    publish = false;
-                }
-            }
-        }
-
-        if publish {
-            if c.version() > &from {
-                let mut v = c.version().clone();
-                v.pre = Prerelease::EMPTY;
-                to = v;
-            }
-
-            let compatible = if to.major != 0 {
-                to.major == from.major
-            } else {
-                to.minor == from.minor
-            };
-
-            if compatible {
-                to.pre = Prerelease::EMPTY;
-
-                if let Some(ref pre) = plan.pre {
-                    to.pre = Prerelease::new(pre).unwrap();
-                }
-
-                if to.major == 0 {
-                    to.minor += 1;
-                    to.patch = 0;
-                } else {
-                    to.major += 1;
-                    to.minor = 0;
-                    to.patch = 0;
-                }
-            }
-
-            to.build = BuildMetadata::EMPTY;
-
-            // we need to update the package even if nothing has changed if we're updating the deps in
-            // a breaking way.
-            let deps_breaking = c
-                .dependencies()
-                .iter()
-                .any(|d| breaking.contains(d.package_name().as_str()));
-        }
-
-        // bump minor if version we want happens to already be taken
-        /*loop {
-            if !upstreamc.versions.iter().any(|v| v.num == to.to_string()) {
-                break;
-            }
-
-            to.minor += 1;
-        }
-
-        if let Some(pre) = &plan.pre {
-            to.pre = Prerelease::new(pre)?;
-        } else {
-            to.pre = old_pre;
-        }*/
 
         new_versions.insert(c.name().to_string(), to.to_string());
 
@@ -291,9 +214,112 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
 
     let output = toml::to_string_pretty(&planner)?;
     std::fs::write(plan.path.join("Plan.toml"), &output)?;
-    writeln!(stdout, "plan generated")?;
+    writeln!(
+        stdout,
+        "plan generated {} packages {} to publish",
+        planner.crates.len(),
+        planner.crates.iter().filter(|c| c.publish).count()
+    )?;
 
     Ok(())
+}
+
+fn get_versions(
+    _config: &Config,
+    plan: &Plan,
+    upstreamc: Option<&FullCrate>,
+    c: &Package,
+    publish: bool,
+    breaking: &mut HashSet<String>,
+) -> Result<(Version, Version)> {
+    let from = upstreamc
+        .and_then(|u| u.max_stable_version.as_deref())
+        .unwrap_or("0.0.0");
+
+    let from = Version::parse(from).unwrap();
+    let mut to = from.clone();
+
+    if !publish {
+        return Ok((from, to));
+    }
+
+    // support also setting a version via Cargo.toml
+    //
+    // if the version in Cargo.toml is > than the last crates.io release we should use it.
+    // if the version in Cargo.timl is > but still compatible we should major bump it to be
+    // safe
+
+    if c.version() > &from {
+        let mut v = c.version().clone();
+        v.pre = Prerelease::EMPTY;
+        to = v;
+    }
+
+    let compatible = if to.major != 0 {
+        to.major == from.major
+    } else {
+        to.minor == from.minor
+    };
+
+    if compatible {
+        to.pre = Prerelease::EMPTY;
+        to.build = BuildMetadata::EMPTY;
+
+        if let Some(ref pre) = plan.pre {
+            to.pre = Prerelease::new(pre).unwrap();
+        }
+
+        if to.major == 0 {
+            to.minor += 1;
+            to.patch = 0;
+        } else {
+            to.major += 1;
+            to.minor = 0;
+            to.patch = 0;
+        }
+
+        breaking.insert(c.name().to_string());
+    }
+
+    Ok((from, to))
+}
+
+fn is_publish(
+    config: &Config,
+    plan: &Plan,
+    upstreamc: Option<&crates_io_api::FullCrate>,
+    c: &Package,
+    breaking: &HashSet<String>,
+) -> Result<bool> {
+    if c.publish().is_some() {
+        return Ok(false);
+    }
+
+    if plan.all {
+        return Ok(true);
+    }
+
+    if plan.crates.iter().any(|p| p == c.name().as_str()) {
+        return Ok(true);
+    }
+
+    if c.dependencies()
+        .iter()
+        .filter(|d| d.kind() != DepKind::Development)
+        .any(|d| breaking.contains(d.package_name().as_str()))
+    {
+        return Ok(true);
+    }
+
+    if plan.changed {
+        if let Some(ver) = upstreamc.and_then(|u| u.max_stable_version.as_ref()) {
+            return diff_crate(false, &config, c, &ver);
+        } else {
+            return Ok(true);
+        }
+    }
+
+    return Ok(false);
 }
 
 async fn rewrite_deps(
@@ -319,10 +345,9 @@ async fn rewrite_deps(
                 } else {
                     upstream
                         .get(dep.package_name().as_str())
-                        .unwrap()
-                        .max_stable_version
-                        .clone()
-                        .unwrap_or("0.0.0".to_string())
+                        .and_then(|d| d.max_stable_version.as_deref())
+                        .unwrap_or("0.0.0")
+                        .to_string()
                 };
 
                 let path = plan.path.canonicalize()?;

@@ -144,7 +144,9 @@ pub fn diff_crate(verbose: bool, config: &Config, member: &Package, version: &st
 
     upstream_files.remove(Path::new(".cargo_vcs_info.json"));
     upstream_files.remove(Path::new("Cargo.toml.orig"));
+    upstream_files.remove(Path::new("Cargo.toml"));
     upstream_files.remove(Path::new("Cargo.lock"));
+    files.remove(Path::new("Cargo.toml"));
     files.remove(Path::new("Cargo.lock"));
     let mut changed = false;
 

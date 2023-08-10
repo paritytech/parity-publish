@@ -2,7 +2,6 @@ use std::{
     collections::{HashMap, HashSet},
     fs,
     io::Write,
-    mem::take,
     path::PathBuf,
 };
 
@@ -54,7 +53,6 @@ pub struct RemoveFeature {
 
 pub async fn handle_plan(plan: Plan) -> Result<()> {
     let mut stdout = StandardStream::stdout(ColorChoice::Auto);
-    let mut stderr = StandardStream::stderr(ColorChoice::Auto);
 
     let config = cargo::Config::default()?;
     config.shell().set_verbosity(cargo::core::Verbosity::Quiet);
@@ -167,17 +165,17 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
             publish = false;
         }
 
-        // if the version is already taken assume it's from a previous pre release and use this
-        // version instead of making a new release
-        if let Some(upstreamc) = upstreamc {
-            //if upstreamc.versions.iter().any(|v| v.num == to.to_string()) && !to.pre.is_empty() {
-            //publish = false;
-            //}
-        }
-
         let from = semver::Version::parse(&upstream_version).unwrap();
         let mut to = from.clone();
         let mut rewrite = Vec::new();
+
+        // if the version is already taken assume it's from a previous pre release and use this
+        // version instead of making a new release
+        if let Some(upstreamc) = upstreamc {
+            if upstreamc.versions.iter().any(|v| v.num == to.to_string()) && !to.pre.is_empty() {
+                publish = false;
+            }
+        }
 
         // support also setting a version via Cargo.toml
         //
@@ -408,8 +406,8 @@ fn remove_features(member: &Package) -> Vec<RemoveFeature> {
                 FeatureValue::Dep { dep_name } => dep_name.as_str(),
                 FeatureValue::DepFeature {
                     dep_name,
-                    dep_feature,
-                    weak,
+                    dep_feature: _,
+                    weak: _,
                 } => dep_name.as_str(),
             };
 

@@ -1,8 +1,8 @@
-use crate::{cli::Check, plan};
+use crate::cli::Check;
 
 use std::io::Write;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use cargo::core::Workspace;
 use termcolor::{ColorChoice, StandardStream};
 
@@ -10,7 +10,6 @@ pub async fn handle_check(check: Check) -> Result<()> {
     let path = check.path.canonicalize()?;
 
     let mut stdout = StandardStream::stdout(ColorChoice::Auto);
-    let mut stderr = StandardStream::stderr(ColorChoice::Auto);
 
     let config = cargo::Config::default()?;
     config.shell().set_verbosity(cargo::core::Verbosity::Quiet);

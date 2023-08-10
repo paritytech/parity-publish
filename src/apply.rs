@@ -1,21 +1,18 @@
 use anyhow::{Context, Result};
 use cargo::{
     core::{dependency::DepKind, resolver::CliFeatures, Workspace},
-    ops::{CompileOptions, Packages, PublishOpts},
+    ops::{Packages, PublishOpts},
     util::{
         auth::Secret,
-        command_prelude::CompileMode,
         toml_mut::{
-            dependency::{PathSource, RegistrySource, Source},
+            dependency::{PathSource, RegistrySource},
             manifest::LocalManifest,
         },
     },
 };
 use crates_io_api::AsyncClient;
-use std::{env, io::Write, path::PathBuf, thread, time::Duration};
+use std::{env, io::Write, thread, time::Duration};
 use termcolor::{ColorChoice, StandardStream};
-use toml::Value;
-use toml_edit::Item;
 
 use crate::{cli::Apply, plan, shared};
 
@@ -28,7 +25,6 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
     let plan: plan::Planner = toml::from_str(&plan)?;
 
     let mut stdout = StandardStream::stdout(ColorChoice::Auto);
-    let mut stderr = StandardStream::stderr(ColorChoice::Auto);
 
     let config = cargo::Config::default()?;
     config.shell().set_verbosity(cargo::core::Verbosity::Quiet);

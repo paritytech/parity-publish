@@ -78,9 +78,12 @@ pub struct Plan {
     /// add a pre release part to the published version
     #[arg(long, short)]
     pub pre: Option<String>,
-    /// publish all crates even if they have not Changed
+    /// publish all crates
     #[arg(long, short)]
     pub all: bool,
+    /// Publish crates that have changed
+    #[arg(long, short)]
+    pub changed: bool,
     /// don't verify before publishing
     #[arg(long, short)]
     pub no_verify: bool,
@@ -90,6 +93,7 @@ pub struct Plan {
     #[arg(default_value = ".")]
     /// Path to the cargo workspace
     pub path: PathBuf,
+    pub crates: Vec<String>,
 }
 
 #[derive(Parser, Debug)]

@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet},
     fs,
     io::Write,
     path::PathBuf,
@@ -61,15 +61,15 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
     config.shell().set_verbosity(cargo::core::Verbosity::Quiet);
     let path = plan.path.canonicalize()?.join("Cargo.toml");
     let workspace = Workspace::new(&path, &config)?;
-    let mut upstream = HashMap::new();
+    let mut upstream = BTreeMap::new();
 
     let cratesio = shared::cratesio()?;
     let workspace_crates = workspace
         .members()
         .map(|m| (m.name().as_str(), m))
-        .collect::<HashMap<_, _>>();
+        .collect::<BTreeMap<_, _>>();
 
-    let mut deps = HashMap::new();
+    let mut deps = BTreeMap::new();
     let mut order = Vec::new();
     let mut own_all = true;
 
@@ -131,7 +131,7 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
     let mut names = workspace
         .members()
         .map(|c| c.name())
-        .collect::<HashSet<_>>();
+        .collect::<BTreeSet<_>>();
 
     while !deps.is_empty() {
         // strip out deps that are not in the workspace
@@ -153,8 +153,8 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
     writeln!(stdout, "calculating plan...")?;
 
     let mut planner = Planner::default();
-    let mut new_versions = HashMap::new();
-    let mut breaking: HashSet<String> = HashSet::new();
+    let mut new_versions = BTreeMap::new();
+    let mut breaking: BTreeSet<String> = BTreeSet::new();
 
     for c in order {
         let upstreamc = upstream.get(c);
@@ -230,7 +230,7 @@ fn get_versions(
     upstreamc: Option<&FullCrate>,
     c: &Package,
     publish: bool,
-    breaking: &mut HashSet<String>,
+    breaking: &mut BTreeSet<String>,
 ) -> Result<(Version, Version)> {
     let from = upstreamc
         .and_then(|u| u.max_stable_version.as_deref())
@@ -289,7 +289,7 @@ fn is_publish(
     plan: &Plan,
     upstreamc: Option<&crates_io_api::FullCrate>,
     c: &Package,
-    breaking: &HashSet<String>,
+    breaking: &BTreeSet<String>,
 ) -> Result<bool> {
     if c.publish().is_some() {
         return Ok(false);
@@ -326,9 +326,9 @@ async fn rewrite_deps(
     plan: &Plan,
     cratesio: &AsyncClient,
     cra: &Package,
-    workspace_crates: &HashMap<&str, &Package>,
-    new_versions: &HashMap<String, String>,
-    upstream: &mut HashMap<String, crates_io_api::FullCrate>,
+    workspace_crates: &BTreeMap<&str, &Package>,
+    new_versions: &BTreeMap<String, String>,
+    upstream: &mut BTreeMap<String, crates_io_api::FullCrate>,
     rewrite: &mut Vec<RewriteDep>,
 ) -> Result<()> {
     let mut stdout = StandardStream::stdout(ColorChoice::Auto);
@@ -409,8 +409,8 @@ async fn rewrite_deps(
 
 fn remove_features(member: &Package) -> Vec<RemoveFeature> {
     let mut remove = Vec::new();
-    let mut dev = HashSet::new();
-    let mut non_dev = HashSet::new();
+    let mut dev = BTreeSet::new();
+    let mut non_dev = BTreeSet::new();
 
     for dep in member.dependencies() {
         if dep.kind() == DepKind::Development {

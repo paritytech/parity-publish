@@ -75,7 +75,7 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
 
     writeln!(stdout, "looking up crates...",)?;
 
-    let cache_path = plan.path.join(&"Plan.cache");
+    let cache_path = plan.path.join("Plan.cache");
     if plan.cache && cache_path.exists() && !plan.refresh {
         upstream = toml::from_str(&fs::read_to_string(&cache_path)?)?;
     }
@@ -186,7 +186,7 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
         )
         .await?;
 
-        let remove = remove_features(&c);
+        let remove = remove_features(c);
 
         planner.crates.push(Publish {
             publish,
@@ -213,7 +213,7 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
     }
 
     let output = toml::to_string_pretty(&planner)?;
-    std::fs::write(plan.path.join("Plan.toml"), &output)?;
+    std::fs::write(plan.path.join("Plan.toml"), output)?;
     writeln!(
         stdout,
         "plan generated {} packages {} to publish",
@@ -313,13 +313,13 @@ fn is_publish(
 
     if plan.changed {
         if let Some(ver) = upstreamc.and_then(|u| u.max_stable_version.as_ref()) {
-            return diff_crate(false, &config, c, &ver);
+            return diff_crate(false, config, c, ver);
         } else {
             return Ok(true);
         }
     }
 
-    return Ok(false);
+    Ok(false)
 }
 
 async fn rewrite_deps(

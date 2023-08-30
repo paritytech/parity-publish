@@ -69,7 +69,7 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
                         .collect::<Vec<_>>();
 
                     if let Some(path) = &dep.path {
-                        let path = apply.path.canonicalize()?.join(&path);
+                        let path = apply.path.canonicalize()?.join(path);
                         let mut source = PathSource::new(&path);
 
                         if dev {

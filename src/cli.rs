@@ -82,7 +82,7 @@ pub struct Plan {
     #[arg(long, short)]
     pub all: bool,
     /// Publish crates that have changed
-    #[arg(long, short)]
+    #[arg(long)]
     pub changed: bool,
     /// don't verify before publishing
     #[arg(long, short)]

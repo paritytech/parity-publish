@@ -4,7 +4,7 @@ use std::{io::Write, process::exit};
 
 use anyhow::Result;
 use cargo::core::Workspace;
-use termcolor::{ColorChoice, StandardStream};
+use termcolor::{ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 pub async fn handle_check(check: Check) -> Result<()> {
     let path = check.path.canonicalize()?;
@@ -21,14 +21,41 @@ pub async fn handle_check(check: Check) -> Result<()> {
             continue;
         }
 
+        let path = c
+            .manifest_path()
+            .strip_prefix(workspace.root_manifest().parent().unwrap())
+            .unwrap();
+
         if c.manifest().metadata().description.is_none() {
+            stdout.set_color(ColorSpec::new().set_bold(true))?;
             writeln!(stdout, "{} has no description", c.name())?;
+            stdout.set_color(ColorSpec::new().set_bold(false))?;
+            writeln!(stdout, "        {}", path.display())?;
+
             ret = 1
         }
 
-        if c.manifest().metadata().license.is_none() {
-            writeln!(stdout, "{} has no license", c.name())?;
+        if c.manifest().metadata().license.is_none()
+            && c.manifest().metadata().license_file.is_none()
+        {
+            stdout.set_color(ColorSpec::new().set_bold(true))?;
+            writeln!(stdout, "{} has no license:", path.display())?;
+            stdout.set_color(ColorSpec::new().set_bold(false))?;
+            writeln!(stdout, "        {}", path.display())?;
             ret = 1;
+        }
+
+        if let Some(readme) = &c.manifest().metadata().readme {
+            if !c.manifest_path().parent().unwrap().join(readme).exists() {
+                stdout.set_color(ColorSpec::new().set_bold(true))?;
+                writeln!(
+                    stdout,
+                    "{} specifies readme but the file does not exist:",
+                    c.name()
+                )?;
+                stdout.set_color(ColorSpec::new().set_bold(false))?;
+                writeln!(stdout, "        {}", path.display())?;
+            }
         }
     }
 

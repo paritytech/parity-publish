@@ -110,11 +110,7 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
 
     let total = plan.crates.iter().filter(|c| c.publish).count();
 
-    for (n, pkg) in plan.crates.iter().enumerate() {
-        if !pkg.publish {
-            continue;
-        }
-
+    for (n, pkg) in plan.crates.iter().filter(|c| c.publish).enumerate() {
         if version_exists(&cratesio, &pkg.name, &pkg.to).await {
             writeln!(
                 stdout,

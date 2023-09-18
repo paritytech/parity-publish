@@ -30,8 +30,12 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
     config.shell().set_verbosity(cargo::core::Verbosity::Quiet);
     let workspace = Workspace::new(&path.join("Cargo.toml"), &config)?;
 
-    let token = env::var("PARITY_PUBLISH_CRATESIO_TOKEN")
-        .context("PARITY_PUBLISH_CRATESIO_TOKEN must be set")?;
+    let token = if !apply.local {
+        env::var("PARITY_PUBLISH_CRATESIO_TOKEN")
+            .context("PARITY_PUBLISH_CRATESIO_TOKEN must be set")?
+    } else {
+        String::new()
+    };
 
     let cratesio = shared::cratesio()?;
 
@@ -52,9 +56,27 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
         }
 
         for dep in &pkg.rewrite_dep {
+            let dep_name = dep.package.as_ref().unwrap_or(&dep.name);
+
             let exisiting_deps = manifest
-                .get_dependency_versions(&dep.name)
+                .get_dependency_versions(dep_name)
                 .collect::<Vec<_>>();
+
+            let mut new_ver = if let Some(v) = &dep.version {
+                v.to_string()
+            } else {
+                plan.crates
+                    .iter()
+                    .inspect(|c| println!("{} {}", &c.name, dep_name))
+                    .find(|c| &c.name == dep_name)
+                    .unwrap()
+                    .to
+                    .clone()
+            };
+
+            if dep.exact {
+                new_ver = format!("={}", new_ver);
+            }
 
             for exisiting_dep in exisiting_deps {
                 let (table, exisiting_dep) = exisiting_dep;
@@ -75,12 +97,12 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
                         if dev {
                             existing_dep = existing_dep.clear_version();
                         } else {
-                            source = source.set_version(&dep.version);
+                            source = source.set_version(&new_ver);
                         }
                         let existing_dep = existing_dep.set_source(source);
                         manifest.insert_into_table(&table, &existing_dep)?;
                     } else {
-                        let source = RegistrySource::new(&dep.version);
+                        let source = RegistrySource::new(&new_ver);
                         let existing_dep = existing_dep.set_source(source);
                         manifest.insert_into_table(&table, &existing_dep)?;
                     }

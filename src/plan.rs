@@ -55,7 +55,7 @@ pub struct Publish {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(default)]
     pub remove_feature: Vec<RemoveFeature>,
-    #[serde(skip_serializing_if = "is_default")]
+    #[serde(skip_serializing_if = "is_not_default")]
     #[serde(default = "bool_true")]
     pub verify: bool,
 }
@@ -63,7 +63,13 @@ pub struct Publish {
 #[derive(serde::Serialize, serde::Deserialize, Default)]
 pub struct RewriteDep {
     pub name: String,
-    pub version: String,
+    pub package: Option<String>,
+    #[serde(skip_serializing_if = "is_default")]
+    #[serde(default)]
+    pub version: Option<String>,
+    #[serde(skip_serializing_if = "is_default")]
+    #[serde(default)]
+    pub exact: bool,
     pub path: Option<PathBuf>,
     //pub dev: bool,
 }
@@ -200,7 +206,6 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
             &cratesio,
             c,
             &workspace_crates,
-            &new_versions,
             &mut upstream,
             &mut rewrite,
         )
@@ -347,7 +352,6 @@ async fn rewrite_deps(
     cratesio: &AsyncClient,
     cra: &Package,
     workspace_crates: &BTreeMap<&str, &Package>,
-    new_versions: &BTreeMap<String, String>,
     upstream: &mut BTreeMap<String, crates_io_api::FullCrate>,
     rewrite: &mut Vec<RewriteDep>,
 ) -> Result<()> {
@@ -356,24 +360,18 @@ async fn rewrite_deps(
     for dep in cra.dependencies() {
         if dep.source_id().is_git() || dep.source_id().is_path() {
             if let Some(dep_crate) = workspace_crates.get(dep.package_name().as_str()) {
-                let new_ver = if let Some(ver) = new_versions.get(dep.package_name().as_str()) {
-                    if plan.exact {
-                        format!("={}", ver)
-                    } else {
-                        ver.to_string()
-                    }
+                let path = plan.path.canonicalize()?;
+                let package_name = if dep.name_in_toml() == dep.package_name() {
+                    None
                 } else {
-                    upstream
-                        .get(dep.package_name().as_str())
-                        .and_then(|d| d.max_stable_version.as_deref())
-                        .unwrap_or("0.0.0")
-                        .to_string()
+                    Some(dep.package_name().to_string())
                 };
 
-                let path = plan.path.canonicalize()?;
                 rewrite.push(RewriteDep {
                     name: dep.name_in_toml().to_string(),
-                    version: new_ver,
+                    package: package_name,
+                    version: None,
+                    exact: plan.exact,
                     path: Some(
                         dep_crate
                             .manifest_path()
@@ -406,17 +404,25 @@ async fn rewrite_deps(
                         continue;
                     }
 
-                    let new_ver = if plan.exact {
-                        format!("={}", u.max_version)
+                    let new_ver = if plan.pre.is_some() {
+                        format!("{}", u.max_version)
                     } else {
                         u.max_stable_version.clone().with_context(|| {
                             format!("crate {} does not have a release", dep.package_name())
                         })?
                     };
 
+                    let package_name = if dep.name_in_toml() == dep.package_name() {
+                        None
+                    } else {
+                        Some(dep.package_name().to_string())
+                    };
+
                     rewrite.push(RewriteDep {
                         name: dep.name_in_toml().to_string(),
-                        version: new_ver,
+                        package: package_name,
+                        version: Some(new_ver),
+                        exact: plan.exact,
                         path: None,
                     });
                 }

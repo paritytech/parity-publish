@@ -2,7 +2,7 @@ use crate::cli::Check;
 
 use std::{io::Write, process::exit};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use cargo::core::Workspace;
 use termcolor::{ColorChoice, ColorSpec, StandardStream, WriteColor};
 
@@ -23,8 +23,7 @@ pub async fn handle_check(check: Check) -> Result<()> {
 
         let path = c
             .manifest_path()
-            .strip_prefix(workspace.root_manifest().parent().unwrap())
-            .unwrap();
+            .strip_prefix(workspace.root_manifest().parent().context("no parent")?)?;
 
         if c.manifest().metadata().description.is_none() {
             stdout.set_color(ColorSpec::new().set_bold(true))?;
@@ -46,7 +45,13 @@ pub async fn handle_check(check: Check) -> Result<()> {
         }
 
         if let Some(readme) = &c.manifest().metadata().readme {
-            if !c.manifest_path().parent().unwrap().join(readme).exists() {
+            if !c
+                .manifest_path()
+                .parent()
+                .context("no parent")?
+                .join(readme)
+                .exists()
+            {
                 stdout.set_color(ColorSpec::new().set_bold(true))?;
                 writeln!(
                     stdout,

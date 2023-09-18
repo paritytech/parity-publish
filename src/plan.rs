@@ -74,6 +74,12 @@ pub struct RewriteDep {
     //pub dev: bool,
 }
 
+impl RewriteDep {
+    pub fn name(&self) -> &str {
+        self.package.as_deref().unwrap_or(self.name.as_str())
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Default)]
 pub struct RemoveFeature {
     pub feature: String,

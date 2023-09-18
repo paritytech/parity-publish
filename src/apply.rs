@@ -56,7 +56,7 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
         }
 
         for dep in &pkg.rewrite_dep {
-            let dep_name = dep.package.as_ref().unwrap_or(&dep.name);
+            let dep_name = dep.name();
 
             let exisiting_deps = manifest
                 .get_dependency_versions(dep_name)

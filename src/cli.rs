@@ -114,4 +114,7 @@ pub struct Check {
     #[arg(default_value = ".")]
     /// Path to the cargo workspace
     pub path: PathBuf,
+    /// Dont exit 1 on errors that don't prevent publish
+    #[arg(long, short)]
+    pub allow_nonfatal: bool,
 }

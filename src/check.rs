@@ -6,7 +6,11 @@ use anyhow::{Context, Result};
 use cargo::core::Workspace;
 use termcolor::{ColorChoice, ColorSpec, StandardStream, WriteColor};
 
-pub async fn handle_check(check: Check) -> Result<()> {
+pub async fn handle_check(chk: Check) -> Result<()> {
+    check(chk).await
+}
+
+pub async fn check(check: Check) -> Result<()> {
     let path = check.path.canonicalize()?;
     let mut ret = 0;
 
@@ -31,7 +35,9 @@ pub async fn handle_check(check: Check) -> Result<()> {
             stdout.set_color(ColorSpec::new().set_bold(false))?;
             writeln!(stdout, "        {}", path.display())?;
 
-            ret = 1
+            if !check.allow_nonfatal {
+                ret = 1
+            }
         }
 
         if c.manifest().metadata().license.is_none()

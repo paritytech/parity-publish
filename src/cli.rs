@@ -85,11 +85,14 @@ pub struct Plan {
     #[arg(long)]
     pub changed: bool,
     /// don't verify before publishing
-    #[arg(long, short)]
+    #[arg(long)]
     pub no_verify: bool,
     /// Use exact version for deps instead of semver
     #[arg(long, short)]
     pub exact: bool,
+    /// Create a new plan even if one exists.
+    #[arg(long)]
+    pub new: bool,
     #[arg(default_value = ".")]
     /// Path to the cargo workspace
     pub path: PathBuf,

@@ -106,6 +106,14 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
         upstream = toml::from_str(&fs::read_to_string(&cache_path)?)?;
     }
 
+    let old_plan: Option<Planner> = if plan.new {
+        None
+    } else {
+        std::fs::read_to_string(plan.path.join("Plan.toml"))
+            .ok()
+            .and_then(|plan| toml::from_str(&plan).ok())
+    };
+
     for package in workspace_crates.values() {
         let c = if let Some(c) = upstream.remove(package.name().as_str()) {
             c
@@ -189,7 +197,15 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
 
         let mut publish = is_publish(&config, &plan, upstreamc, c, &breaking)?;
 
-        let (from, to) = get_versions(&config, &plan, upstreamc, c, publish, &mut breaking)?;
+        let (from, to) = get_versions(
+            &config,
+            &plan,
+            upstreamc,
+            c,
+            publish,
+            &mut breaking,
+            old_plan.as_ref(),
+        )?;
 
         // if the version is already taken assume it's from a previous pre release and use this
         // version instead of making a new release
@@ -256,10 +272,17 @@ fn get_versions(
     c: &Package,
     publish: bool,
     breaking: &mut BTreeSet<String>,
+    old_plan: Option<&Planner>,
 ) -> Result<(Version, Version)> {
     let from = upstreamc
         .and_then(|u| u.max_stable_version.as_deref())
         .unwrap_or("0.0.0");
+
+    if let Some(oldc) =
+        old_plan.and_then(|p| p.crates.iter().find(|cr| cr.name == c.name().as_str()))
+    {
+        return Ok((Version::parse(&oldc.from)?, Version::parse(&oldc.to)?));
+    }
 
     let from = Version::parse(from).unwrap();
     let mut to = from.clone();

@@ -93,6 +93,8 @@ pub struct Plan {
     /// Create a new plan even if one exists.
     #[arg(long)]
     pub new: bool,
+    #[arg(long)]
+    pub skip_check: bool,
     #[arg(default_value = ".")]
     /// Path to the cargo workspace
     pub path: PathBuf,

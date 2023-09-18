@@ -16,7 +16,8 @@ use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 use crate::{
     changed::{diff_crate, download_crates},
-    cli::Plan,
+    check,
+    cli::{Check, Plan},
     shared::{self, parity_crate_owner_id},
 };
 
@@ -94,6 +95,14 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
     let manifest_path = plan.path.canonicalize()?.join("Cargo.toml");
     let workspace = Workspace::new(&manifest_path, &config)?;
     let mut upstream = BTreeMap::new();
+
+    if !plan.skip_check {
+        check::check(Check {
+            path: plan.path.clone(),
+            allow_nonfatal: true,
+        })
+        .await?;
+    }
 
     let cratesio = shared::cratesio()?;
     let workspace_crates = workspace

@@ -30,7 +30,7 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
     config.shell().set_verbosity(cargo::core::Verbosity::Quiet);
     let workspace = Workspace::new(&path.join("Cargo.toml"), &config)?;
 
-    let token = if !apply.local {
+    let token = if apply.publish {
         env::var("PARITY_PUBLISH_CRATESIO_TOKEN")
             .context("PARITY_PUBLISH_CRATESIO_TOKEN must be set")?
     } else {
@@ -123,7 +123,7 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
         manifest.write()?;
     }
 
-    if apply.local {
+    if !apply.publish {
         return Ok(());
     }
 

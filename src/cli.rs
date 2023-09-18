@@ -104,9 +104,9 @@ pub struct Apply {
     /// Don't actually publish crates
     #[arg(long, short)]
     pub dry_run: bool,
-    /// run changes to allow local testing
+    /// Publish the crates
     #[arg(long, short)]
-    pub local: bool,
+    pub publish: bool,
     #[arg(default_value = ".")]
     /// Path to the cargo workspace
     pub path: PathBuf,

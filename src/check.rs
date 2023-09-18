@@ -1,7 +1,7 @@
 use crate::cli::Check;
 
 use std::{
-    collections::{BTreeSet, HashSet},
+    collections::{BTreeSet},
     io::Write,
     process::exit,
 };

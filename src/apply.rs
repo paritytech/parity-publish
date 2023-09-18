@@ -11,6 +11,7 @@ use cargo::{
     },
 };
 use crates_io_api::AsyncClient;
+
 use std::{env, io::Write, thread, time::Duration};
 use termcolor::{ColorChoice, StandardStream};
 

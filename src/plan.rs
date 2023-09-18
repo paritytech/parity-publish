@@ -20,6 +20,18 @@ use crate::{
     shared::{self, parity_crate_owner_id},
 };
 
+fn is_default<T: Default + PartialEq>(t: &T) -> bool {
+    *t == Default::default()
+}
+
+fn is_not_default<T: Default + PartialEq>(t: &T) -> bool {
+    *t != Default::default()
+}
+
+fn bool_true() -> bool {
+    true
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Default)]
 pub struct Planner {
     #[serde(rename = "crate")]
@@ -28,15 +40,23 @@ pub struct Planner {
 
 #[derive(serde::Serialize, serde::Deserialize, Default)]
 pub struct Publish {
+    #[serde(default = "bool_true")]
+    #[serde(skip_serializing_if = "is_not_default")]
     pub publish: bool,
     pub name: String,
+    pub path: PathBuf,
     pub from: String,
     pub to: String,
     pub bump: String,
     pub reason: String,
-    pub path: PathBuf,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub rewrite_dep: Vec<RewriteDep>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub remove_feature: Vec<RemoveFeature>,
+    #[serde(skip_serializing_if = "is_default")]
+    #[serde(default = "bool_true")]
     pub verify: bool,
 }
 
@@ -59,8 +79,8 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
 
     let config = cargo::Config::default()?;
     config.shell().set_verbosity(cargo::core::Verbosity::Quiet);
-    let path = plan.path.canonicalize()?.join("Cargo.toml");
-    let workspace = Workspace::new(&path, &config)?;
+    let manifest_path = plan.path.canonicalize()?.join("Cargo.toml");
+    let workspace = Workspace::new(&manifest_path, &config)?;
     let mut upstream = BTreeMap::new();
 
     let cratesio = shared::cratesio()?;
@@ -200,7 +220,7 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
                 .manifest_path()
                 .parent()
                 .unwrap()
-                .strip_prefix(path.parent().unwrap())
+                .strip_prefix(manifest_path.parent().unwrap())
                 .unwrap()
                 .to_path_buf(),
             remove_feature: remove,

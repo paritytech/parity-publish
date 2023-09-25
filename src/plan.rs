@@ -1,24 +1,23 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
-    fs,
     io::Write,
     path::PathBuf,
 };
 
-use anyhow::{ensure, Context, Result};
+use anyhow::{Context, Result};
 use cargo::{
-    core::{dependency::DepKind, FeatureValue, Package, Workspace},
+    core::{dependency::DepKind, FeatureValue, Package, Source, Summary, Workspace},
+    sources::RegistrySource,
     Config,
 };
-use crates_io_api::{AsyncClient, FullCrate};
 use semver::{BuildMetadata, Prerelease, Version};
-use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
+use termcolor::{ColorChoice, StandardStream};
 
 use crate::{
-    changed::{diff_crate, download_crates},
+    changed::diff_crate,
     check,
     cli::{Check, Plan},
-    shared::{self, parity_crate_owner_id},
+    registry,
 };
 
 fn is_default<T: Default + PartialEq>(t: &T) -> bool {
@@ -104,103 +103,52 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
         .await?;
     }
 
-    let cratesio = shared::cratesio()?;
+    let order = order(&mut stdout, &workspace)?;
+
+    let _lock = config.acquire_package_cache_lock()?;
+    let mut reg = registry::get_registry(&workspace)?;
+
+    writeln!(stdout, "looking up crates...",)?;
+    download_crates(&mut reg, &workspace)?;
+    writeln!(stdout, "...done",)?;
+
+    for c in workspace.members().filter(|c| c.publish().is_none()) {
+        upstream.insert(
+            c.name().to_string(),
+            registry::get_crate(&mut reg, c.name()).unwrap(),
+        );
+    }
+
     let workspace_crates = workspace
         .members()
         .map(|m| (m.name().as_str(), m))
         .collect::<BTreeMap<_, _>>();
 
-    let mut deps = BTreeMap::new();
-    let mut order = Vec::new();
-    let mut own_all = true;
-
-    writeln!(stdout, "looking up crates...",)?;
-
-    let cache_path = plan.path.join("Plan.cache");
-    if plan.cache && cache_path.exists() && !plan.refresh {
-        upstream = toml::from_str(&fs::read_to_string(&cache_path)?)?;
-    }
-
-    let old_plan: Option<Planner> = if plan.new {
-        None
-    } else {
-        std::fs::read_to_string(plan.path.join("Plan.toml"))
-            .ok()
-            .and_then(|plan| toml::from_str(&plan).ok())
-    };
-
-    for package in workspace_crates.values() {
-        let c = if let Some(c) = upstream.remove(package.name().as_str()) {
-            c
-        } else if let Ok(c) = cratesio.full_crate(package.name().as_str(), true).await {
-            c
-        } else {
-            continue;
-        };
-
-        let parity_own = c
-            .owners
-            .iter()
-            .any(|user| user.id == parity_crate_owner_id())
-            || package.publish().is_some();
-        if !parity_own {
-            stdout.set_color(ColorSpec::new().set_fg(Some(Color::Red)))?;
-            writeln!(
-                stdout,
-                "{} exists and is owned by someone else",
-                package.name()
-            )?;
-            stdout.set_color(ColorSpec::new().set_fg(None))?;
-        }
-        upstream.insert(package.name().to_string(), c);
-        own_all &= parity_own;
-    }
-
-    if plan.cache {
-        fs::write(&cache_path, toml::to_string_pretty(&upstream)?)?;
-    }
-    //new_versions.insert(c.name().to_string(), to.to_string());
-
-    ensure!(own_all, "we do not own all crates in the workspace");
-
-    download_crates(&workspace, &upstream.values().cloned().collect::<Vec<_>>()).await?;
-
-    writeln!(stdout, "calculating order...")?;
-
-    // map name to deps
-    for member in workspace.members() {
-        let deps_list = member
-            .dependencies()
-            .iter()
-            .filter(|d| d.kind() != DepKind::Development)
-            .collect::<Vec<_>>();
-        deps.insert(member.name().as_str(), deps_list);
-    }
-
-    let mut names = workspace
-        .members()
-        .map(|c| c.name())
-        .collect::<BTreeSet<_>>();
-
-    while !deps.is_empty() {
-        // strip out deps that are not in the workspace
-        for deps in deps.values_mut() {
-            deps.retain(|dep| names.contains(dep.package_name().as_str()))
-        }
-
-        deps.retain(|name, deps| {
-            if deps.is_empty() {
-                order.push(*name);
-                names.remove(*name);
-                false
-            } else {
-                true
-            }
-        });
-    }
-
     writeln!(stdout, "calculating plan...")?;
 
+    let planner = calculate_plan(&plan, order, &mut upstream, workspace_crates, &config).await?;
+
+    let output = toml::to_string_pretty(&planner)?;
+    std::fs::write(plan.path.join("Plan.toml"), output)?;
+    writeln!(
+        stdout,
+        "plan generated {} packages {} to publish",
+        planner.crates.len(),
+        planner.crates.iter().filter(|c| c.publish).count()
+    )?;
+
+    Ok(())
+}
+
+async fn calculate_plan(
+    plan: &Plan,
+    order: Vec<&str>,
+    upstream: &mut BTreeMap<String, Vec<Summary>>,
+    workspace_crates: BTreeMap<&str, &Package>,
+    config: &Config,
+) -> Result<Planner> {
+    let manifest_path = plan.path.canonicalize()?.join("Cargo.toml");
+    let old_plan = old_plan(plan);
     let mut planner = Planner::default();
     let mut new_versions = BTreeMap::new();
     let mut breaking: BTreeSet<String> = BTreeSet::new();
@@ -210,37 +158,21 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
         let c = *workspace_crates.get(c).unwrap();
         let mut rewrite = Vec::new();
 
-        let mut publish = is_publish(&config, &plan, upstreamc, c, &breaking)?;
+        let mut publish = is_publish(&config, plan, upstreamc, c, &breaking)?;
 
-        let (from, to) = get_versions(
-            &config,
-            &plan,
-            upstreamc,
-            c,
-            publish,
-            &mut breaking,
-            old_plan.as_ref(),
-        )?;
+        let (from, to) = get_versions(plan, upstreamc, c, publish, &mut breaking, &old_plan)?;
 
         // if the version is already taken assume it's from a previous pre release and use this
         // version instead of making a new release
         if let Some(upstreamc) = upstreamc {
-            if upstreamc.versions.iter().any(|v| v.num == to.to_string()) && !to.pre.is_empty() {
+            if upstreamc.iter().any(|u| u.version() == &to) && !to.pre.is_empty() {
                 publish = false;
             }
         }
 
         new_versions.insert(c.name().to_string(), to.to_string());
 
-        rewrite_deps(
-            &plan,
-            &cratesio,
-            c,
-            &workspace_crates,
-            &mut upstream,
-            &mut rewrite,
-        )
-        .await?;
+        rewrite_deps(plan, c, &workspace_crates, upstream, &mut rewrite).await?;
 
         let remove = remove_features(c);
 
@@ -263,43 +195,30 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
             verify: !plan.no_verify,
         });
     }
-
-    if plan.cache {
-        fs::write(&cache_path, toml::to_string_pretty(&upstream)?)?;
-    }
-
-    let output = toml::to_string_pretty(&planner)?;
-    std::fs::write(plan.path.join("Plan.toml"), output)?;
-    writeln!(
-        stdout,
-        "plan generated {} packages {} to publish",
-        planner.crates.len(),
-        planner.crates.iter().filter(|c| c.publish).count()
-    )?;
-
-    Ok(())
+    Ok(planner)
 }
 
 fn get_versions(
-    _config: &Config,
     plan: &Plan,
-    upstreamc: Option<&FullCrate>,
+    upstreamc: Option<&Vec<Summary>>,
     c: &Package,
     publish: bool,
     breaking: &mut BTreeSet<String>,
-    old_plan: Option<&Planner>,
+    old_plan: &Planner,
 ) -> Result<(Version, Version)> {
     let from = upstreamc
-        .and_then(|u| u.max_stable_version.as_deref())
-        .unwrap_or("0.0.0");
+        .and_then(|u| max_ver(u, plan.pre.is_some()))
+        .map(|u| u.version().clone())
+        .unwrap_or(Version::parse("0.1.0").unwrap());
 
-    if let Some(oldc) =
-        old_plan.and_then(|p| p.crates.iter().find(|cr| cr.name == c.name().as_str()))
+    if let Some(oldc) = old_plan
+        .crates
+        .iter()
+        .find(|cr| cr.name == c.name().as_str())
     {
         return Ok((Version::parse(&oldc.from)?, Version::parse(&oldc.to)?));
     }
 
-    let from = Version::parse(from).unwrap();
     let mut to = from.clone();
 
     if !publish {
@@ -350,7 +269,7 @@ fn get_versions(
 fn is_publish(
     config: &Config,
     plan: &Plan,
-    upstreamc: Option<&crates_io_api::FullCrate>,
+    upstreamc: Option<&Vec<Summary>>,
     c: &Package,
     breaking: &BTreeSet<String>,
 ) -> Result<bool> {
@@ -375,8 +294,8 @@ fn is_publish(
     }
 
     if plan.changed {
-        if let Some(ver) = upstreamc.and_then(|u| u.max_stable_version.as_ref()) {
-            return diff_crate(false, config, c, ver);
+        if let Some(upstreamc) = upstreamc.and_then(|u| max_ver(u, plan.pre.is_some())) {
+            return diff_crate(false, config, c, &upstreamc.version().to_string());
         } else {
             return Ok(true);
         }
@@ -385,30 +304,55 @@ fn is_publish(
     Ok(false)
 }
 
+fn download_crates(reg: &mut RegistrySource, workspace: &Workspace) -> Result<()> {
+    for c in workspace.members().filter(|c| c.publish().is_none()) {
+        let _ = registry::get_crate(reg, c.name());
+    }
+
+    for cra in workspace.members() {
+        for dep in cra.dependencies() {
+            if dep.source_id().is_git() || dep.source_id().is_path() {
+                let _ = registry::get_crate(reg, cra.name());
+            }
+        }
+    }
+
+    reg.block_until_ready()?;
+    Ok(())
+}
+
 async fn rewrite_deps(
     plan: &Plan,
-    cratesio: &AsyncClient,
     cra: &Package,
     workspace_crates: &BTreeMap<&str, &Package>,
-    upstream: &mut BTreeMap<String, crates_io_api::FullCrate>,
+    upstream: &BTreeMap<String, Vec<Summary>>,
     rewrite: &mut Vec<RewriteDep>,
 ) -> Result<()> {
-    let mut stdout = StandardStream::stdout(ColorChoice::Auto);
-
     for dep in cra.dependencies() {
         if dep.source_id().is_git() || dep.source_id().is_path() {
             if let Some(dep_crate) = workspace_crates.get(dep.package_name().as_str()) {
                 let path = plan.path.canonicalize()?;
-                let package_name = if dep.name_in_toml() == dep.package_name() {
-                    None
+
+                let package_name = (dep.name_in_toml() == dep.package_name())
+                    .then(|| dep.package_name().to_string());
+
+                let version = if dep.source_id().is_git() {
+                    let version = upstream
+                        .get(dep.package_name().as_str())
+                        .and_then(|c| max_ver(c, false))
+                        .with_context(|| {
+                            format!("crate {} has no crates.io release", dep.package_name())
+                        })?
+                        .version();
+                    Some(version.to_string())
                 } else {
-                    Some(dep.package_name().to_string())
+                    None
                 };
 
                 rewrite.push(RewriteDep {
                     name: dep.name_in_toml().to_string(),
                     package: package_name,
-                    version: None,
+                    version,
                     exact: plan.exact,
                     path: Some(
                         dep_crate
@@ -420,50 +364,6 @@ async fn rewrite_deps(
                             .to_path_buf(),
                     ),
                 })
-            } else {
-                let u = if let Some(u) = upstream.get(&dep.package_name().to_string()) {
-                    Some(u)
-                } else {
-                    writeln!(stdout, "looking up {}...", dep.package_name())?;
-                    let u = cratesio
-                        .full_crate(dep.package_name().as_str(), true)
-                        .await
-                        .ok();
-                    if let Some(u) = u {
-                        upstream.insert(dep.package_name().to_string(), u);
-                        upstream.get(dep.package_name().as_str())
-                    } else {
-                        None
-                    }
-                };
-
-                if let Some(u) = u {
-                    if u.versions.iter().all(|v| v.yanked) {
-                        continue;
-                    }
-
-                    let new_ver = if plan.pre.is_some() {
-                        format!("{}", u.max_version)
-                    } else {
-                        u.max_stable_version.clone().with_context(|| {
-                            format!("crate {} does not have a release", dep.package_name())
-                        })?
-                    };
-
-                    let package_name = if dep.name_in_toml() == dep.package_name() {
-                        None
-                    } else {
-                        Some(dep.package_name().to_string())
-                    };
-
-                    rewrite.push(RewriteDep {
-                        name: dep.name_in_toml().to_string(),
-                        package: package_name,
-                        version: Some(new_ver),
-                        exact: plan.exact,
-                        path: None,
-                    });
-                }
             }
         }
     }
@@ -510,4 +410,63 @@ fn remove_features(member: &Package) -> Vec<RemoveFeature> {
     }
 
     remove
+}
+
+fn order<'a>(stdout: &mut StandardStream, workspace: &'a Workspace) -> Result<Vec<&'a str>> {
+    writeln!(stdout, "calculating order...")?;
+
+    let mut deps = BTreeMap::new();
+    let mut order = Vec::new();
+
+    // map name to deps
+    for member in workspace.members() {
+        let deps_list = member
+            .dependencies()
+            .iter()
+            .filter(|d| d.kind() != DepKind::Development)
+            .collect::<Vec<_>>();
+        deps.insert(member.name().as_str(), deps_list);
+    }
+
+    let mut names = workspace
+        .members()
+        .map(|c| c.name())
+        .collect::<BTreeSet<_>>();
+
+    while !deps.is_empty() {
+        // strip out deps that are not in the workspace
+        for deps in deps.values_mut() {
+            deps.retain(|dep| names.contains(dep.package_name().as_str()))
+        }
+
+        deps.retain(|name, deps| {
+            if deps.is_empty() {
+                order.push(*name);
+                names.remove(*name);
+                false
+            } else {
+                true
+            }
+        });
+    }
+
+    Ok(order)
+}
+
+fn old_plan(plan: &Plan) -> Planner {
+    if plan.new {
+        Default::default()
+    } else {
+        std::fs::read_to_string(plan.path.join("Plan.toml"))
+            .ok()
+            .and_then(|plan| toml::from_str(&plan).ok())
+            .unwrap_or_default()
+    }
+}
+
+fn max_ver(crates: &[Summary], pre: bool) -> Option<&Summary> {
+    crates
+        .iter()
+        .filter(|c| pre || c.version().pre.is_empty())
+        .max_by_key(|c| c.version())
 }

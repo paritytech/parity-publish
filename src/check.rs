@@ -1,10 +1,6 @@
 use crate::cli::Check;
 
-use std::{
-    collections::{BTreeSet},
-    io::Write,
-    process::exit,
-};
+use std::{collections::BTreeSet, io::Write, process::exit};
 
 use anyhow::{Context, Result};
 use cargo::core::{dependency::DepKind, Workspace};

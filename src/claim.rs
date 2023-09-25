@@ -2,6 +2,7 @@ use std::env::temp_dir;
 use std::fs::{create_dir, remove_dir_all};
 use std::io::Write;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 use std::{env, fs, thread};
 
@@ -12,6 +13,7 @@ use anyhow::{Context, Result};
 use cargo::core::resolver::CliFeatures;
 use cargo::core::Workspace;
 use cargo::ops::{Packages, PublishOpts};
+use futures::future::join_all;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 pub async fn handle_claim(claim: Claim) -> Result<()> {
@@ -19,7 +21,6 @@ pub async fn handle_claim(claim: Claim) -> Result<()> {
     config.shell().set_verbosity(cargo::core::Verbosity::Quiet);
     let path = claim.path.canonicalize()?.join("Cargo.toml");
     let workspace = Workspace::new(&path, &config)?;
-    let members = workspace.members();
     let token = if claim.dry_run {
         String::new()
     } else {
@@ -27,7 +28,7 @@ pub async fn handle_claim(claim: Claim) -> Result<()> {
             .context("PARITY_PUBLISH_CRATESIO_TOKEN must be set")?
     };
 
-    let cratesio = shared::cratesio()?;
+    let cratesio = Arc::new(shared::cratesio()?);
 
     let mut stdout = StandardStream::stdout(ColorChoice::Auto);
     let mut stderr = StandardStream::stderr(ColorChoice::Auto);
@@ -38,8 +39,17 @@ pub async fn handle_claim(claim: Claim) -> Result<()> {
         "looking for crates to publish, this may take a while...."
     )?;
 
-    for member in members {
-        if let Ok(owners) = cratesio.crate_owners(&member.name()).await {
+    let mut owners = Vec::new();
+    for c in workspace.members() {
+        let name = c.name().to_string();
+        let cio = Arc::clone(&cratesio);
+        let fut = async move { cio.crate_owners(&name).await };
+        owners.push(fut);
+    }
+    let owners = join_all(owners).await;
+
+    for (member, owners) in workspace.members().zip(owners) {
+        if let Ok(owners) = owners {
             if member.publish().is_some() {
                 stdout.set_color(ColorSpec::new().set_fg(Some(Color::Yellow)))?;
                 writeln!(stdout, "{} is set to not publish", member.name())?;

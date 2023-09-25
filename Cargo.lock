@@ -3247,6 +3247,7 @@ dependencies = [
  "cargo-semver-checks",
  "clap",
  "crates_io_api",
+ "futures",
  "reqwest",
  "semver",
  "serde",

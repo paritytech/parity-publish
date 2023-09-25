@@ -7,10 +7,10 @@ use cargo::core::{dependency::DepKind, Workspace};
 use termcolor::{ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 pub async fn handle_check(chk: Check) -> Result<()> {
-    check(chk).await
+    exit(check(chk).await?)
 }
 
-pub async fn check(check: Check) -> Result<()> {
+pub async fn check(check: Check) -> Result<i32> {
     let path = check.path.canonicalize()?;
     let mut ret = 0;
 
@@ -109,5 +109,5 @@ pub async fn check(check: Check) -> Result<()> {
         }
     }
 
-    exit(ret)
+    return Ok(ret);
 }

@@ -10,12 +10,13 @@ use cargo::{
         },
     },
 };
-use crates_io_api::AsyncClient;
+
+use semver::Version;
 
 use std::{env, io::Write, thread, time::Duration};
 use termcolor::{ColorChoice, StandardStream};
 
-use crate::{cli::Apply, plan, shared};
+use crate::{cli::Apply, plan, registry};
 
 pub async fn handle_apply(apply: Apply) -> Result<()> {
     let path = apply.path.canonicalize()?;
@@ -37,8 +38,6 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
     } else {
         String::new()
     };
-
-    let cratesio = shared::cratesio()?;
 
     writeln!(stdout, "rewriting deps...")?;
 
@@ -131,10 +130,14 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
     drop(workspace);
     let workspace = Workspace::new(&path.join("Cargo.toml"), &config)?;
 
+    let _lock = config.acquire_package_cache_lock()?;
+    let mut reg = registry::get_registry(&workspace)?;
+    registry::download_crates(&mut reg, &workspace, false)?;
+
     let total = plan.crates.iter().filter(|c| c.publish).count();
 
     for (n, pkg) in plan.crates.iter().filter(|c| c.publish).enumerate() {
-        if version_exists(&cratesio, &pkg.name, &pkg.to).await {
+        if version_exists(&mut reg, &pkg.name, &pkg.to) {
             writeln!(
                 stdout,
                 "({:3<}/{:3<}) {}-{} already published",
@@ -170,10 +173,12 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
     Ok(())
 }
 
-async fn version_exists(cratesio: &AsyncClient, name: &str, ver: &str) -> bool {
-    let c = cratesio.get_crate(name).await;
+fn version_exists(reg: &mut cargo::sources::RegistrySource, name: &str, ver: &str) -> bool {
+    let c = registry::get_crate(reg, name.to_string().into());
+    let ver = Version::parse(ver).unwrap();
+
     if let Ok(c) = c {
-        if c.versions.iter().any(|v| v.num == ver) {
+        if c.iter().any(|v| v.version() == &ver) {
             return true;
         }
     }

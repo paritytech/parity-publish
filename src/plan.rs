@@ -6,8 +6,7 @@ use std::{
 
 use anyhow::{Context, Result};
 use cargo::{
-    core::{dependency::DepKind, FeatureValue, Package, Source, Summary, Workspace},
-    sources::RegistrySource,
+    core::{dependency::DepKind, FeatureValue, Package, Summary, Workspace},
     Config,
 };
 use semver::{BuildMetadata, Prerelease, Version};
@@ -109,7 +108,7 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
     let mut reg = registry::get_registry(&workspace)?;
 
     writeln!(stdout, "looking up crates...",)?;
-    download_crates(&mut reg, &workspace)?;
+    registry::download_crates(&mut reg, &workspace, true)?;
     writeln!(stdout, "...done",)?;
 
     for c in workspace.members().filter(|c| c.publish().is_none()) {
@@ -302,23 +301,6 @@ fn is_publish(
     }
 
     Ok(false)
-}
-
-fn download_crates(reg: &mut RegistrySource, workspace: &Workspace) -> Result<()> {
-    for c in workspace.members().filter(|c| c.publish().is_none()) {
-        let _ = registry::get_crate(reg, c.name());
-    }
-
-    for cra in workspace.members() {
-        for dep in cra.dependencies() {
-            if dep.source_id().is_git() || dep.source_id().is_path() {
-                let _ = registry::get_crate(reg, cra.name());
-            }
-        }
-    }
-
-    reg.block_until_ready()?;
-    Ok(())
 }
 
 async fn rewrite_deps(

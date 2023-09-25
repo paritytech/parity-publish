@@ -50,9 +50,6 @@ pub struct Claim {
     /// Don't actually claim crates
     #[arg(long, short)]
     pub dry_run: bool,
-    /// Yank crates that we already own
-    #[arg(long, short)]
-    pub yank: bool,
     #[arg(default_value = ".")]
     /// Path to the cargo workspace
     pub path: PathBuf,

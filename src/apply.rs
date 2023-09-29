@@ -59,7 +59,7 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
             let dep_name = dep.name();
 
             let exisiting_deps = manifest
-                .get_dependency_versions(dep_name)
+                .get_dependency_versions(&dep.name)
                 .collect::<Vec<_>>();
 
             let mut new_ver = if let Some(v) = &dep.version {

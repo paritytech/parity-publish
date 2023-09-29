@@ -67,7 +67,6 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
             } else {
                 plan.crates
                     .iter()
-                    .inspect(|c| println!("{} {}", &c.name, dep_name))
                     .find(|c| &c.name == dep_name)
                     .unwrap()
                     .to

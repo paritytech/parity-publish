@@ -1,6 +1,9 @@
-use crate::cli::Check;
+use crate::{
+    cli::Check,
+    shared::{cratesio, get_owners, Owner},
+};
 
-use std::{collections::BTreeSet, io::Write, process::exit};
+use std::{collections::BTreeSet, io::Write, process::exit, sync::Arc};
 
 use anyhow::{Context, Result};
 use cargo::core::{dependency::DepKind, Workspace};
@@ -15,27 +18,54 @@ pub async fn check(check: Check) -> Result<i32> {
     let mut ret = 0;
 
     let mut stdout = StandardStream::stdout(ColorChoice::Auto);
+    let mut stderr = StandardStream::stderr(ColorChoice::Auto);
 
     let config = cargo::Config::default()?;
     config.shell().set_verbosity(cargo::core::Verbosity::Quiet);
     let workspace = Workspace::new(&path.join("Cargo.toml"), &config)?;
 
-    for c in workspace.members() {
+    writeln!(stderr, "looking up crate data, this may take a while....")?;
+
+    let owners = get_owners(&workspace, &Arc::new(cratesio()?)).await;
+
+    for (c, owner) in workspace.members().zip(owners) {
         if c.publish().is_some() {
             continue;
+        }
+
+        match owner {
+            Owner::Us => (),
+            Owner::None => {
+                stdout.set_color(ColorSpec::new().set_bold(true))?;
+                write!(stdout, "{} is not claimed on crates.io", c.name())?;
+                stdout.set_color(ColorSpec::new().set_bold(false))?;
+                writeln!(stdout, " ({})", path.display())?;
+                ret = 1;
+            }
+            Owner::Other => {
+                stdout.set_color(ColorSpec::new().set_bold(true))?;
+                write!(
+                    stdout,
+                    "{} is owned by some one else on crates.io",
+                    c.name()
+                )?;
+                stdout.set_color(ColorSpec::new().set_bold(false))?;
+                writeln!(stdout, " ({})", path.display())?;
+                ret = 1;
+            }
         }
 
         let path = c
             .manifest_path()
             .strip_prefix(workspace.root_manifest().parent().context("no parent")?)?;
 
-        if c.manifest().metadata().description.is_none() {
-            stdout.set_color(ColorSpec::new().set_bold(true))?;
-            write!(stdout, "{} has no description", c.name())?;
-            stdout.set_color(ColorSpec::new().set_bold(false))?;
-            writeln!(stdout, " ({})", path.display())?;
+        if !check.allow_nonfatal {
+            if c.manifest().metadata().description.is_none() {
+                stdout.set_color(ColorSpec::new().set_bold(true))?;
+                write!(stdout, "{} has no description", c.name())?;
+                stdout.set_color(ColorSpec::new().set_bold(false))?;
+                writeln!(stdout, " ({})", path.display())?;
 
-            if !check.allow_nonfatal {
                 ret = 1
             }
         }

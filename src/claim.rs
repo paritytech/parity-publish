@@ -2,21 +2,22 @@ use std::env::temp_dir;
 use std::fs::{create_dir, remove_dir_all};
 use std::io::Write;
 use std::path::PathBuf;
+use std::process::exit;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{env, fs, thread};
 
 use crate::cli::Claim;
-use crate::shared::{self, parity_crate_owner_id};
+use crate::shared::{self, get_owners, Owner};
 
 use anyhow::{Context, Result};
 use cargo::core::resolver::CliFeatures;
 use cargo::core::Workspace;
 use cargo::ops::{Packages, PublishOpts};
-use futures::future::join_all;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 pub async fn handle_claim(claim: Claim) -> Result<()> {
+    let mut ret = 0;
     let config = cargo::Config::default()?;
     config.shell().set_verbosity(cargo::core::Verbosity::Quiet);
     let path = claim.path.canonicalize()?.join("Cargo.toml");
@@ -34,30 +35,21 @@ pub async fn handle_claim(claim: Claim) -> Result<()> {
     let mut stderr = StandardStream::stderr(ColorChoice::Auto);
     let mut throttle = false;
 
-    writeln!(
-        stderr,
-        "looking for crates to publish, this may take a while...."
-    )?;
+    writeln!(stderr, "looking up crate data, this may take a while....")?;
 
-    let mut owners = Vec::new();
-    for c in workspace.members() {
-        let name = c.name().to_string();
-        let cio = Arc::clone(&cratesio);
-        let fut = async move { cio.crate_owners(&name).await };
-        owners.push(fut);
-    }
-    let owners = join_all(owners).await;
+    let owners = get_owners(&workspace, &cratesio).await;
 
-    for (member, owners) in workspace.members().zip(owners) {
-        if let Ok(owners) = owners {
-            if member.publish().is_some() {
-                stdout.set_color(ColorSpec::new().set_fg(Some(Color::Yellow)))?;
-                writeln!(stdout, "{} is set to not publish", member.name())?;
-                stdout.set_color(ColorSpec::new().set_fg(None))?;
-                continue;
-            }
-            let parity_own = owners.iter().any(|user| user.id == parity_crate_owner_id());
-            if !parity_own {
+    for (member, owner) in workspace.members().zip(owners) {
+        if member.publish().is_some() {
+            stdout.set_color(ColorSpec::new().set_fg(Some(Color::Yellow)))?;
+            writeln!(stdout, "{} is set to not publish", member.name())?;
+            stdout.set_color(ColorSpec::new().set_fg(None))?;
+            continue;
+        }
+
+        match owner {
+            Owner::Us => (),
+            Owner::Other => {
                 stdout.set_color(ColorSpec::new().set_fg(Some(Color::Red)))?;
                 writeln!(
                     stdout,
@@ -65,58 +57,60 @@ pub async fn handle_claim(claim: Claim) -> Result<()> {
                     member.name()
                 )?;
                 stdout.set_color(ColorSpec::new().set_fg(None))?;
+                ret = 1;
             }
-        } else {
-            if member.publish().is_some() {
-                stdout.set_color(ColorSpec::new().set_fg(Some(Color::Yellow)))?;
-                writeln!(stdout, "{} is set to not publish", member.name())?;
+            Owner::None => {
+                if member.publish().is_some() {
+                    stdout.set_color(ColorSpec::new().set_fg(Some(Color::Yellow)))?;
+                    writeln!(stdout, "{} is set to not publish", member.name())?;
+                    stdout.set_color(ColorSpec::new().set_fg(None))?;
+                    continue;
+                }
+
+                let manifest = write_manifest(&member.name())?;
+                let opts = PublishOpts {
+                    config: &config,
+                    token: Some(token.clone().into()),
+                    index: None,
+                    verify: false,
+                    allow_dirty: true,
+                    jobs: None,
+                    keep_going: false,
+                    to_publish: Packages::Default,
+                    targets: Vec::new(),
+                    dry_run: claim.dry_run,
+                    registry: None,
+                    cli_features: CliFeatures {
+                        features: Default::default(),
+                        all_features: false,
+                        uses_default_features: true,
+                    },
+                };
+                let workspace = Workspace::new(&manifest, &config)?;
+
+                if !throttle && cargo::ops::publish(&workspace, &opts).is_err() {
+                    throttle = true;
+                }
+
+                if throttle {
+                    // crates.io rate limit
+                    thread::sleep(Duration::from_secs(60 * 10 + 5));
+                    cargo::ops::publish(&workspace, &opts)?;
+                }
+
+                remove_dir_all(manifest.parent().unwrap())?;
+                stdout.set_color(ColorSpec::new().set_fg(Some(Color::Blue)))?;
+                if claim.dry_run {
+                    writeln!(stdout, "published {} (dryrun)", member.name())?;
+                } else {
+                    writeln!(stdout, "published {}", member.name())?;
+                }
                 stdout.set_color(ColorSpec::new().set_fg(None))?;
-                continue;
             }
-
-            let manifest = write_manifest(&member.name())?;
-            let opts = PublishOpts {
-                config: &config,
-                token: Some(token.clone().into()),
-                index: None,
-                verify: false,
-                allow_dirty: true,
-                jobs: None,
-                keep_going: false,
-                to_publish: Packages::Default,
-                targets: Vec::new(),
-                dry_run: claim.dry_run,
-                registry: None,
-                cli_features: CliFeatures {
-                    features: Default::default(),
-                    all_features: false,
-                    uses_default_features: true,
-                },
-            };
-            let workspace = Workspace::new(&manifest, &config)?;
-
-            if !throttle && cargo::ops::publish(&workspace, &opts).is_err() {
-                throttle = true;
-            }
-
-            if throttle {
-                // crates.io rate limit
-                thread::sleep(Duration::from_secs(60 * 10 + 5));
-                cargo::ops::publish(&workspace, &opts)?;
-            }
-
-            remove_dir_all(manifest.parent().unwrap())?;
-            stdout.set_color(ColorSpec::new().set_fg(Some(Color::Blue)))?;
-            if claim.dry_run {
-                writeln!(stdout, "published {} (dryrun)", member.name())?;
-            } else {
-                writeln!(stdout, "published {}", member.name())?;
-            }
-            stdout.set_color(ColorSpec::new().set_fg(None))?;
         }
     }
 
-    Ok(())
+    exit(ret);
 }
 
 fn write_manifest(name: &str) -> Result<PathBuf> {

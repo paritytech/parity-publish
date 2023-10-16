@@ -3,21 +3,101 @@ use crate::{
     shared::{cratesio, get_owners, Owner},
 };
 
-use std::{collections::BTreeSet, io::Write, process::exit, sync::Arc};
+use std::{collections::BTreeSet, io::Write, path::PathBuf, process::exit, sync::Arc};
 
 use anyhow::{Context, Result};
 use cargo::core::{dependency::DepKind, Workspace};
 use termcolor::{ColorChoice, ColorSpec, StandardStream, WriteColor};
+
+#[derive(Default)]
+struct Issues {
+    name: String,
+    path: PathBuf,
+    no_desc: bool,
+    no_license: bool,
+    unclaimed: bool,
+    taken: bool,
+    broken_readme: bool,
+    needs_publish: bool,
+}
+
+impl Issues {
+    fn has_fatal_issue(&self) -> bool {
+        self.no_license || self.taken || self.broken_readme || self.needs_publish
+    }
+
+    fn has_issue(&self) -> bool {
+        self.no_license
+            || self.taken
+            || self.broken_readme
+            || self.needs_publish
+            || self.no_desc
+            || self.unclaimed
+    }
+
+    fn print(&self, stdout: &mut StandardStream) -> Result<()> {
+        if !self.has_issue() {
+            return Ok(());
+        }
+
+        stdout.set_color(ColorSpec::new().set_bold(true))?;
+        write!(stdout, "{}", self.name)?;
+        stdout.set_color(ColorSpec::new().set_bold(false))?;
+        writeln!(stdout, " ({}):", self.path.display())?;
+
+        if self.no_desc {
+            writeln!(stdout, "    no description")?;
+        }
+        if self.no_license {
+            writeln!(stdout, "    no license")?;
+        }
+        if self.unclaimed {
+            writeln!(stdout, "    unclaimed on crates.io")?;
+        }
+        if self.taken {
+            writeln!(stdout, "    owned by some one else on crates.io")?;
+        }
+        if self.broken_readme {
+            writeln!(stdout, "    readme specified in Cargo.toml doesnt exist")?;
+        }
+        if self.needs_publish {
+            writeln!(
+                stdout,
+                "    \"publish = false\" is set but this crate is a dependency of others"
+            )?;
+        }
+
+        writeln!(stdout)?;
+
+        Ok(())
+    }
+}
 
 pub async fn handle_check(chk: Check) -> Result<()> {
     exit(check(chk).await?)
 }
 
 pub async fn check(check: Check) -> Result<i32> {
-    let path = check.path.canonicalize()?;
-    let mut ret = 0;
-
     let mut stdout = StandardStream::stdout(ColorChoice::Auto);
+    let issues = issues(&check).await?;
+
+    for issue in &issues {
+        issue.print(&mut stdout)?;
+    }
+
+    if check.allow_nonfatal && issues.iter().any(|i| i.has_fatal_issue()) {
+        Ok(1)
+    } else if issues.iter().any(|i| i.has_issue()) {
+        Ok(1)
+    } else {
+        Ok(0)
+    }
+}
+
+async fn issues(check: &Check) -> Result<Vec<Issues>> {
+    let path = check.path.canonicalize()?;
+    let mut all_issues = Vec::new();
+
     let mut stderr = StandardStream::stderr(ColorChoice::Auto);
 
     let config = cargo::Config::default()?;
@@ -27,78 +107,7 @@ pub async fn check(check: Check) -> Result<i32> {
     writeln!(stderr, "looking up crate data, this may take a while....")?;
 
     let owners = get_owners(&workspace, &Arc::new(cratesio()?)).await;
-
-    for (c, owner) in workspace.members().zip(owners) {
-        if c.publish().is_some() {
-            continue;
-        }
-
-        match owner {
-            Owner::Us => (),
-            Owner::None => {
-                stdout.set_color(ColorSpec::new().set_bold(true))?;
-                write!(stdout, "{} is not claimed on crates.io", c.name())?;
-                stdout.set_color(ColorSpec::new().set_bold(false))?;
-                writeln!(stdout, " ({})", path.display())?;
-                ret = 1;
-            }
-            Owner::Other => {
-                stdout.set_color(ColorSpec::new().set_bold(true))?;
-                write!(
-                    stdout,
-                    "{} is owned by some one else on crates.io",
-                    c.name()
-                )?;
-                stdout.set_color(ColorSpec::new().set_bold(false))?;
-                writeln!(stdout, " ({})", path.display())?;
-                ret = 1;
-            }
-        }
-
-        let path = c
-            .manifest_path()
-            .strip_prefix(workspace.root_manifest().parent().context("no parent")?)?;
-
-        if !check.allow_nonfatal {
-            if c.manifest().metadata().description.is_none() {
-                stdout.set_color(ColorSpec::new().set_bold(true))?;
-                write!(stdout, "{} has no description", c.name())?;
-                stdout.set_color(ColorSpec::new().set_bold(false))?;
-                writeln!(stdout, " ({})", path.display())?;
-
-                ret = 1
-            }
-        }
-
-        if c.manifest().metadata().license.is_none()
-            && c.manifest().metadata().license_file.is_none()
-        {
-            stdout.set_color(ColorSpec::new().set_bold(true))?;
-            write!(stdout, "{} has no license:", c.name())?;
-            stdout.set_color(ColorSpec::new().set_bold(false))?;
-            writeln!(stdout, " ({})", path.display())?;
-            ret = 1;
-        }
-
-        if let Some(readme) = &c.manifest().metadata().readme {
-            if !c
-                .manifest_path()
-                .parent()
-                .context("no parent")?
-                .join(readme)
-                .exists()
-            {
-                stdout.set_color(ColorSpec::new().set_bold(true))?;
-                write!(
-                    stdout,
-                    "{} specifies readme but the file does not exist:",
-                    c.name()
-                )?;
-                stdout.set_color(ColorSpec::new().set_bold(false))?;
-                writeln!(stdout, " ({})", path.display())?;
-            }
-        }
-    }
+    //let owners: Vec<Owner> = vec![Owner::Us; workspace.members().count()];
 
     let mut new_publish = BTreeSet::new();
     let mut should_publish = workspace
@@ -126,18 +135,51 @@ pub async fn check(check: Check) -> Result<i32> {
         new_publish = BTreeSet::new();
     }
 
-    for c in workspace.members() {
-        if should_publish.contains(c.name().as_str()) && c.publish().is_some() {
-            let path = c
-                .manifest_path()
-                .strip_prefix(workspace.root_manifest().parent().context("no parent")?)?;
+    workspace
+        .members()
+        .filter(|c| c.publish().is_none())
+        .for_each(|c| {
+            should_publish.remove(c.name().as_str());
+        });
 
-            stdout.set_color(ColorSpec::new().set_bold(true))?;
-            write!(stdout, "{} is no publish but a needed dependency", c.name())?;
-            stdout.set_color(ColorSpec::new().set_bold(false))?;
-            writeln!(stdout, " ({})", path.display())?;
+    for (c, owner) in workspace.members().zip(owners) {
+        let path = c
+            .manifest_path()
+            .parent()
+            .context("no parent")?
+            .strip_prefix(workspace.root_manifest().parent().context("no parent")?)?;
+
+        let mut issues = Issues::default();
+        issues.name = c.name().to_string();
+        issues.path = path.to_path_buf();
+
+        if c.publish().is_none() {
+            match owner {
+                Owner::Us => (),
+                Owner::None => issues.unclaimed = true,
+                Owner::Other => issues.taken = true,
+            }
+
+            issues.no_desc = c.manifest().metadata().description.is_none();
+            issues.no_license = c.manifest().metadata().license.is_none()
+                && c.manifest().metadata().license_file.is_none();
+
+            if let Some(readme) = &c.manifest().metadata().readme {
+                if !c
+                    .manifest_path()
+                    .parent()
+                    .context("no parent")?
+                    .join(readme)
+                    .exists()
+                {
+                    issues.broken_readme = true;
+                }
+            }
         }
+
+        issues.needs_publish = should_publish.contains(c.name().as_str());
+        all_issues.push(issues);
     }
 
-    return Ok(ret);
+    Ok(all_issues)
 }

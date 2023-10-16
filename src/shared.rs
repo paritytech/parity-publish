@@ -7,6 +7,7 @@ use futures::future::join_all;
 
 const PARITY_CRATE_OWNER_ID: u64 = 150167;
 
+#[derive(Clone)]
 pub enum Owner {
     Us,
     None,
@@ -35,7 +36,7 @@ pub async fn get_owners(
         .members()
         .map(|c| {
             let name = c.name().to_string();
-            let cio = Arc::clone(&cratesio);
+            let cio = Arc::clone(cratesio);
             async move { cio.crate_owners(&name).await }
         })
         .collect::<Vec<_>>();

@@ -66,7 +66,7 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
             } else {
                 plan.crates
                     .iter()
-                    .find(|c| &c.name == dep_name)
+                    .find(|c| c.name == dep_name)
                     .unwrap()
                     .to
                     .clone()
@@ -137,7 +137,7 @@ fn publish(
 ) -> Result<()> {
     let mut stdout = StandardStream::stdout(ColorChoice::Auto);
 
-    let workspace = Workspace::new(&path.join("Cargo.toml"), &config)?;
+    let workspace = Workspace::new(&path.join("Cargo.toml"), config)?;
 
     let _lock = config.acquire_package_cache_lock()?;
     let mut reg = registry::get_registry(&workspace)?;
@@ -162,7 +162,7 @@ fn publish(
         )?;
 
         let opts = PublishOpts {
-            config: &config,
+            config,
             token: Some(Secret::from(token.clone())),
             index: None,
             verify: pkg.verify && !apply.dry_run,

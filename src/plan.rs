@@ -141,7 +141,7 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
 async fn calculate_plan(
     plan: &Plan,
     order: Vec<&str>,
-    upstream: &mut BTreeMap<String, Vec<Summary>>,
+    upstream: &BTreeMap<String, Vec<Summary>>,
     workspace_crates: BTreeMap<&str, &Package>,
     config: &Config,
 ) -> Result<Planner> {
@@ -156,7 +156,7 @@ async fn calculate_plan(
         let c = *workspace_crates.get(c).unwrap();
         let mut rewrite = Vec::new();
 
-        let mut publish = is_publish(&config, plan, upstreamc, c, &breaking)?;
+        let mut publish = is_publish(config, plan, upstreamc, c, &breaking)?;
 
         let (from, to) = get_versions(plan, upstreamc, c, publish, &mut breaking, &old_plan)?;
 

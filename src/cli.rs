@@ -111,6 +111,9 @@ pub struct Check {
     /// Path to the cargo workspace
     pub path: PathBuf,
     /// Dont exit 1 on errors that don't prevent publish
-    #[arg(long, short)]
+    #[arg(long)]
     pub allow_nonfatal: bool,
+    /// Dont exit 1 when crate is unpublished
+    #[arg(long)]
+    pub allow_unpublished: bool,
 }

@@ -98,6 +98,7 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
         check::check(Check {
             path: plan.path.clone(),
             allow_nonfatal: true,
+            allow_unpublished: false,
         })
         .await?;
     }

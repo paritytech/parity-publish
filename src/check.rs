@@ -15,24 +15,31 @@ struct Issues {
     path: PathBuf,
     no_desc: bool,
     no_license: bool,
-    unclaimed: bool,
+    unpublished: bool,
     taken: bool,
     broken_readme: bool,
     needs_publish: bool,
 }
 
 impl Issues {
-    fn has_fatal_issue(&self) -> bool {
-        self.no_license || self.taken || self.broken_readme || self.needs_publish
-    }
-
     fn has_issue(&self) -> bool {
         self.no_license
             || self.taken
             || self.broken_readme
             || self.needs_publish
             || self.no_desc
-            || self.unclaimed
+            || self.unpublished
+    }
+
+    fn ret_err(&self, check: &Check) -> bool {
+        let no_desc = self.no_desc && !check.allow_nonfatal;
+        let unpublished = self.no_desc && !check.allow_unpublished;
+        self.no_license
+            || self.taken
+            || self.broken_readme
+            || self.needs_publish
+            || no_desc
+            || unpublished
     }
 
     fn print(&self, stdout: &mut StandardStream) -> Result<()> {
@@ -51,8 +58,8 @@ impl Issues {
         if self.no_license {
             writeln!(stdout, "    no license")?;
         }
-        if self.unclaimed {
-            writeln!(stdout, "    unclaimed on crates.io")?;
+        if self.unpublished {
+            writeln!(stdout, "    unpublished on crates.io")?;
         }
         if self.taken {
             writeln!(stdout, "    owned by some one else on crates.io")?;
@@ -85,9 +92,7 @@ pub async fn check(check: Check) -> Result<i32> {
         issue.print(&mut stdout)?;
     }
 
-    if check.allow_nonfatal && issues.iter().any(|i| i.has_fatal_issue()) {
-        Ok(1)
-    } else if issues.iter().any(|i| i.has_issue()) {
+    if issues.iter().any(|i| i.ret_err(&check)) {
         Ok(1)
     } else {
         Ok(0)
@@ -156,7 +161,7 @@ async fn issues(check: &Check) -> Result<Vec<Issues>> {
         if c.publish().is_none() {
             match owner {
                 Owner::Us => (),
-                Owner::None => issues.unclaimed = true,
+                Owner::None => issues.unpublished = true,
                 Owner::Other => issues.taken = true,
             }
 

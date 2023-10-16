@@ -109,7 +109,6 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
 
     writeln!(stdout, "looking up crates...",)?;
     registry::download_crates(&mut reg, &workspace, true)?;
-    writeln!(stdout, "...done",)?;
 
     for c in workspace.members().filter(|c| c.publish().is_none()) {
         upstream.insert(

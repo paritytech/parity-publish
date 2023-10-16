@@ -13,10 +13,10 @@ use cargo::{
 
 use semver::Version;
 
-use std::{env, io::Write, thread, time::Duration};
+use std::{env, io::Write, path::Path, thread, time::Duration};
 use termcolor::{ColorChoice, StandardStream};
 
-use crate::{cli::Apply, plan, registry};
+use crate::{cli::Apply, plan::Planner, registry};
 
 pub async fn handle_apply(apply: Apply) -> Result<()> {
     let path = apply.path.canonicalize()?;
@@ -24,13 +24,12 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
 
     let plan = std::fs::read_to_string(apply.path.join("Plan.toml"))
         .context("Can't find Plan.toml. Have your ran plan first?")?;
-    let plan: plan::Planner = toml::from_str(&plan)?;
+    let plan: Planner = toml::from_str(&plan)?;
 
     let mut stdout = StandardStream::stdout(ColorChoice::Auto);
 
     let config = cargo::Config::default()?;
     config.shell().set_verbosity(cargo::core::Verbosity::Quiet);
-    let workspace = Workspace::new(&path.join("Cargo.toml"), &config)?;
 
     let token = if apply.publish {
         env::var("PARITY_PUBLISH_CRATESIO_TOKEN")
@@ -126,7 +125,18 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
         return Ok(());
     }
 
-    drop(workspace);
+    publish(&apply, &config, plan, &path, token)
+}
+
+fn publish(
+    apply: &Apply,
+    config: &cargo::Config,
+    plan: Planner,
+    path: &Path,
+    token: String,
+) -> Result<()> {
+    let mut stdout = StandardStream::stdout(ColorChoice::Auto);
+
     let workspace = Workspace::new(&path.join("Cargo.toml"), &config)?;
 
     let _lock = config.acquire_package_cache_lock()?;

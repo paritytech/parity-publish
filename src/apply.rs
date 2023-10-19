@@ -55,19 +55,23 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
         }
 
         for dep in &pkg.rewrite_dep {
-            let dep_name = dep.name();
-
             let exisiting_deps = manifest
                 .get_dependency_versions(&dep.name)
                 .collect::<Vec<_>>();
+
+            let toml_name = exisiting_deps
+                .iter()
+                .find_map(|d| d.1.as_ref().ok())
+                .context("coultnt find dep")?;
+            let toml_name = toml_name.name.as_str();
 
             let mut new_ver = if let Some(v) = &dep.version {
                 v.to_string()
             } else {
                 plan.crates
                     .iter()
-                    .find(|c| c.name == dep_name)
-                    .unwrap()
+                    .find(|c| c.name == toml_name)
+                    .context("cant find package")?
                     .to
                     .clone()
             };

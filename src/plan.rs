@@ -62,7 +62,6 @@ pub struct Publish {
 #[derive(serde::Serialize, serde::Deserialize, Default)]
 pub struct RewriteDep {
     pub name: String,
-    pub package: Option<String>,
     #[serde(skip_serializing_if = "is_default")]
     #[serde(default)]
     pub version: Option<String>,
@@ -73,10 +72,10 @@ pub struct RewriteDep {
     //pub dev: bool,
 }
 
-impl RewriteDep {
-    pub fn name(&self) -> &str {
-        self.package.as_deref().unwrap_or(self.name.as_str())
-    }
+#[derive(Debug, serde::Serialize, serde::Deserialize, Default)]
+pub struct RemoveDep {
+    pub name: String,
+    pub package: Option<String>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default)]
@@ -333,7 +332,6 @@ async fn rewrite_deps(
 
                 rewrite.push(RewriteDep {
                     name: dep.name_in_toml().to_string(),
-                    package: package_name,
                     version,
                     exact: plan.exact,
                     path: Some(

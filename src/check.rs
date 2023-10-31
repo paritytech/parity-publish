@@ -111,8 +111,11 @@ async fn issues(check: &Check) -> Result<Vec<Issues>> {
 
     writeln!(stderr, "looking up crate data, this may take a while....")?;
 
-    let owners = get_owners(&workspace, &Arc::new(cratesio()?)).await;
-    //let owners: Vec<Owner> = vec![Owner::Us; workspace.members().count()];
+    let owners = if check.no_check_owner {
+        vec![Owner::Us; workspace.members().count()]
+    } else {
+        get_owners(&workspace, &Arc::new(cratesio()?)).await
+    };
 
     let mut new_publish = BTreeSet::new();
     let mut should_publish = workspace

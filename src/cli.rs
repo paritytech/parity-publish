@@ -113,7 +113,10 @@ pub struct Check {
     /// Dont exit 1 on errors that don't prevent publish
     #[arg(long)]
     pub allow_nonfatal: bool,
-    /// Dont exit 1 when crate is unpublished
     #[arg(long)]
+    /// Dont check ownership status
+    pub no_check_owner: bool,
+    #[arg(long)]
+    /// Dont exit 1 when crate is unpublished
     pub allow_unpublished: bool,
 }

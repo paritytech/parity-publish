@@ -98,6 +98,7 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
             path: plan.path.clone(),
             allow_nonfatal: true,
             allow_unpublished: false,
+            no_check_owner: false,
         })
         .await?;
     }

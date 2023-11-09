@@ -99,6 +99,7 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
             allow_nonfatal: true,
             allow_unpublished: false,
             no_check_owner: false,
+            recursive: false,
         })
         .await?;
     }

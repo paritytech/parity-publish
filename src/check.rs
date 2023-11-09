@@ -175,24 +175,26 @@ async fn issues(check: &Check) -> Result<Vec<Issues>> {
         }
     }
 
-    loop {
-        let mut did_something = false;
-        for c in workspace.members() {
-            for dep in c
-                .dependencies()
-                .iter()
-                .filter(|d| d.kind() != DepKind::Development)
-            {
-                for deps in should_publish
-                    .values_mut()
-                    .filter(|d| d.contains(dep.package_name().as_str()))
+    if check.recursive {
+        loop {
+            let mut did_something = false;
+            for c in workspace.members() {
+                for dep in c
+                    .dependencies()
+                    .iter()
+                    .filter(|d| d.kind() != DepKind::Development)
                 {
-                    did_something |= deps.insert(c.name().as_str());
+                    for deps in should_publish
+                        .values_mut()
+                        .filter(|d| d.contains(dep.package_name().as_str()))
+                    {
+                        did_something |= deps.insert(c.name().as_str());
+                    }
                 }
             }
-        }
-        if !did_something {
-            break;
+            if !did_something {
+                break;
+            }
         }
     }
 

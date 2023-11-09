@@ -119,4 +119,7 @@ pub struct Check {
     #[arg(long)]
     /// Dont exit 1 when crate is unpublished
     pub allow_unpublished: bool,
+    #[arg(long)]
+    /// recursively find what crates depend on unpublished crates
+    pub recursive: bool,
 }

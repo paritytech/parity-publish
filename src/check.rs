@@ -3,7 +3,13 @@ use crate::{
     shared::{cratesio, get_owners, Owner},
 };
 
-use std::{collections::BTreeSet, io::Write, path::PathBuf, process::exit, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    io::Write,
+    path::PathBuf,
+    process::exit,
+    sync::Arc,
+};
 
 use anyhow::{Context, Result};
 use cargo::core::{dependency::DepKind, Workspace};
@@ -18,7 +24,7 @@ struct Issues {
     unpublished: bool,
     taken: bool,
     broken_readme: bool,
-    needs_publish: bool,
+    needs_publish: Option<Vec<String>>,
 }
 
 impl Issues {
@@ -26,7 +32,7 @@ impl Issues {
         self.no_license
             || self.taken
             || self.broken_readme
-            || self.needs_publish
+            || self.needs_publish.is_some()
             || self.no_desc
             || self.unpublished
     }
@@ -37,7 +43,7 @@ impl Issues {
         self.no_license
             || self.taken
             || self.broken_readme
-            || self.needs_publish
+            || self.needs_publish.is_some()
             || no_desc
             || unpublished
     }
@@ -67,11 +73,14 @@ impl Issues {
         if self.broken_readme {
             writeln!(stdout, "    readme specified in Cargo.toml doesnt exist")?;
         }
-        if self.needs_publish {
+        if let Some(ref deps) = self.needs_publish {
             writeln!(
                 stdout,
                 "    \"publish = false\" is set but this crate is a dependency of others"
             )?;
+            for dep in deps {
+                writeln!(stdout, "        {}", dep)?;
+            }
         }
 
         writeln!(stdout)?;
@@ -117,22 +126,24 @@ async fn issues(check: &Check) -> Result<Vec<Issues>> {
         get_owners(&workspace, &Arc::new(cratesio()?)).await
     };
 
-    let mut new_publish = BTreeSet::new();
+    let mut new_publish = BTreeMap::new();
     let mut should_publish = workspace
         .members()
         .filter(|c| c.publish().is_none())
         .flat_map(|c| c.dependencies())
         .filter(|d| d.kind() != DepKind::Development)
         .map(|d| d.package_name().as_str())
-        .collect::<BTreeSet<_>>();
+        .map(|d| (d, BTreeSet::new()))
+        .collect::<BTreeMap<_, BTreeSet<&str>>>();
 
     loop {
         new_publish = workspace
             .members()
-            .filter(|c| new_publish.contains(c.name().as_str()))
+            .filter(|c| new_publish.contains_key(c.name().as_str()))
             .flat_map(|c| c.dependencies())
             .filter(|d| d.kind() != DepKind::Development)
             .map(|d| d.package_name().as_str())
+            .map(|d| (d, BTreeSet::new()))
             .collect();
 
         if new_publish.is_empty() {
@@ -140,7 +151,7 @@ async fn issues(check: &Check) -> Result<Vec<Issues>> {
         }
 
         should_publish.extend(new_publish);
-        new_publish = BTreeSet::new();
+        new_publish = BTreeMap::new();
     }
 
     workspace
@@ -149,6 +160,51 @@ async fn issues(check: &Check) -> Result<Vec<Issues>> {
         .for_each(|c| {
             should_publish.remove(c.name().as_str());
         });
+
+    for c in workspace.members() {
+        for dep in c
+            .dependencies()
+            .iter()
+            .filter(|d| d.kind() != DepKind::Development)
+        {
+            should_publish
+                .entry(dep.package_name().as_str())
+                .and_modify(|d| {
+                    d.insert(c.name().as_str());
+                });
+        }
+    }
+
+    loop {
+        let mut did_something = false;
+        for c in workspace.members() {
+            for dep in c
+                .dependencies()
+                .iter()
+                .filter(|d| d.kind() != DepKind::Development)
+            {
+                for deps in should_publish
+                    .values_mut()
+                    .filter(|d| d.contains(dep.package_name().as_str()))
+                {
+                    did_something |= deps.insert(c.name().as_str());
+                }
+            }
+        }
+        if !did_something {
+            break;
+        }
+    }
+
+    for deps in should_publish.values_mut() {
+        deps.retain(|dep| {
+            workspace
+                .members()
+                .find(|c| c.name().as_str() == *dep)
+                .map(|c| c.publish().is_none())
+                .unwrap_or(false)
+        })
+    }
 
     for (c, owner) in workspace.members().zip(owners) {
         let path = c
@@ -185,7 +241,35 @@ async fn issues(check: &Check) -> Result<Vec<Issues>> {
             }
         }
 
-        issues.needs_publish = should_publish.contains(c.name().as_str());
+        issues.needs_publish = should_publish.get(c.name().as_str()).map(|deps| {
+            deps.iter()
+                .map(|d| {
+                    workspace
+                        .members()
+                        .find(|c| c.name().as_str() == *d)
+                        .unwrap()
+                })
+                .map(|c| {
+                    format!(
+                        "{} ({})",
+                        c.name(),
+                        c.manifest_path()
+                            .parent()
+                            .context("no parent")
+                            .unwrap()
+                            .strip_prefix(
+                                workspace
+                                    .root_manifest()
+                                    .parent()
+                                    .context("no parent")
+                                    .unwrap()
+                            )
+                            .unwrap()
+                            .display()
+                    )
+                })
+                .collect()
+        });
         all_issues.push(issues);
     }
 

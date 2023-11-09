@@ -315,8 +315,8 @@ async fn rewrite_deps(
             if let Some(dep_crate) = workspace_crates.get(dep.package_name().as_str()) {
                 let path = plan.path.canonicalize()?;
 
-                let package_name = (dep.name_in_toml() != dep.package_name())
-                    .then(|| dep.package_name().to_string());
+                //let package_name = (dep.name_in_toml() != dep.package_name())
+                //    .then(|| dep.package_name().to_string());
 
                 let version = if dep.source_id().is_git() {
                     let version = upstream

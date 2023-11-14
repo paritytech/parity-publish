@@ -119,6 +119,14 @@ pub fn get_changed_crates(w: &Workspace, from: &str, to: &str) -> Result<Vec<Cha
 
     find_indirect_changes(w, &mut changed);
 
+    changed.retain(|ch| {
+        w.members()
+            .find(|c| c.name().as_str() == ch.name)
+            .unwrap()
+            .publish()
+            .is_none()
+    });
+
     Ok(changed)
 }
 

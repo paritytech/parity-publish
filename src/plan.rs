@@ -5,15 +5,12 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use cargo::{
-    core::{dependency::DepKind, FeatureValue, Package, Summary, Workspace},
-    Config,
-};
+use cargo::core::{dependency::DepKind, FeatureValue, Package, Summary, Workspace};
 use semver::{BuildMetadata, Prerelease, Version};
 use termcolor::{ColorChoice, StandardStream};
 
 use crate::{
-    check,
+    changed, check,
     cli::{Check, Plan},
     registry,
 };
@@ -103,6 +100,23 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
         .await?;
     }
 
+    let changed = if let Some(from) = &plan.changed {
+        let changed = changed::get_changed_crates(&workspace, from, "HEAD")?;
+        let indirect = changed
+            .iter()
+            .filter(|c| matches!(c.kind, changed::ChangeKind::Dependency))
+            .count();
+        writeln!(
+            stdout,
+            "{} packages changed {} indirect",
+            changed.len(),
+            indirect
+        )?;
+        changed.into_iter().map(|c| c.name).collect()
+    } else {
+        BTreeSet::new()
+    };
+
     let order = order(&mut stdout, &workspace)?;
 
     let _lock = config.acquire_package_cache_lock()?;
@@ -125,7 +139,7 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
 
     writeln!(stdout, "calculating plan...")?;
 
-    let planner = calculate_plan(&plan, order, &mut upstream, workspace_crates, &config).await?;
+    let planner = calculate_plan(&plan, order, &mut upstream, workspace_crates, &changed).await?;
 
     let output = toml::to_string_pretty(&planner)?;
     std::fs::write(plan.path.join("Plan.toml"), output)?;
@@ -144,7 +158,7 @@ async fn calculate_plan(
     order: Vec<&str>,
     upstream: &BTreeMap<String, Vec<Summary>>,
     workspace_crates: BTreeMap<&str, &Package>,
-    config: &Config,
+    changed: &BTreeSet<String>,
 ) -> Result<Planner> {
     let manifest_path = plan.path.canonicalize()?.join("Cargo.toml");
     let old_plan = old_plan(plan);
@@ -157,7 +171,7 @@ async fn calculate_plan(
         let c = *workspace_crates.get(c).unwrap();
         let mut rewrite = Vec::new();
 
-        let mut publish = is_publish(config, plan, upstreamc, c, &breaking)?;
+        let mut publish = is_publish(plan, c, &breaking, changed)?;
 
         let (from, to) = get_versions(plan, upstreamc, c, publish, &mut breaking, &old_plan)?;
 
@@ -266,11 +280,10 @@ fn get_versions(
 }
 
 fn is_publish(
-    _config: &Config,
     plan: &Plan,
-    _upstreamc: Option<&Vec<Summary>>,
     c: &Package,
     breaking: &BTreeSet<String>,
+    changed: &BTreeSet<String>,
 ) -> Result<bool> {
     if c.publish().is_some() {
         return Ok(false);
@@ -292,8 +305,8 @@ fn is_publish(
         return Ok(true);
     }
 
-    if plan.changed {
-        // TODO
+    if changed.contains(c.name().as_str()) {
+        return Ok(true);
     }
 
     Ok(false)

@@ -150,6 +150,8 @@ fn publish(
     let total = plan.crates.iter().filter(|c| c.publish).count();
 
     for (n, pkg) in plan.crates.iter().filter(|c| c.publish).enumerate() {
+        let n = n + 1;
+
         if version_exists(&mut reg, &pkg.name, &pkg.to) {
             writeln!(
                 stdout,

@@ -59,9 +59,12 @@ pub struct Claim {
 pub struct Changed {
     #[arg(long, short)]
     pub verbose: bool,
-    #[arg(default_value = ".")]
     /// Path to the cargo workspace
     pub path: PathBuf,
+    /// The git commit to look for changes from
+    pub from: String,
+    /// The git commit to look for changes to
+    pub to: String,
 }
 
 #[derive(Parser, Debug)]

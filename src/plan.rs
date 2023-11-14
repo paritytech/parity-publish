@@ -13,7 +13,6 @@ use semver::{BuildMetadata, Prerelease, Version};
 use termcolor::{ColorChoice, StandardStream};
 
 use crate::{
-    changed::diff_crate,
     check,
     cli::{Check, Plan},
     registry,
@@ -267,9 +266,9 @@ fn get_versions(
 }
 
 fn is_publish(
-    config: &Config,
+    _config: &Config,
     plan: &Plan,
-    upstreamc: Option<&Vec<Summary>>,
+    _upstreamc: Option<&Vec<Summary>>,
     c: &Package,
     breaking: &BTreeSet<String>,
 ) -> Result<bool> {
@@ -294,11 +293,7 @@ fn is_publish(
     }
 
     if plan.changed {
-        if let Some(upstreamc) = upstreamc.and_then(|u| max_ver(u, plan.pre.is_some())) {
-            return diff_crate(false, config, c, &upstreamc.version().to_string());
-        } else {
-            return Ok(true);
-        }
+        // TODO
     }
 
     Ok(false)

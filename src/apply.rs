@@ -147,25 +147,26 @@ fn publish(
     let mut reg = registry::get_registry(&workspace)?;
     registry::download_crates(&mut reg, &workspace, false)?;
 
-    let total = plan.crates.iter().filter(|c| c.publish).count();
+    let skipped = plan
+        .crates
+        .iter()
+        .filter(|c| c.publish)
+        .filter(|pkg| version_exists(&mut reg, &pkg.name, &pkg.to))
+        .count();
+    let total = plan.crates.iter().filter(|c| c.publish).count() - skipped;
+
+    writeln!(
+        stdout,
+        "Publishing {} packages ({} skipped)",
+        total, skipped
+    )?;
 
     for (n, pkg) in plan.crates.iter().filter(|c| c.publish).enumerate() {
         let n = n + 1;
 
         if version_exists(&mut reg, &pkg.name, &pkg.to) {
-            writeln!(
-                stdout,
-                "({:3<}/{:3<}) {}-{} already published",
-                n, total, pkg.name, pkg.to
-            )?;
             continue;
         }
-
-        writeln!(
-            stdout,
-            "({:3<}/{:3<}) publishing {}-{}...",
-            n, total, pkg.name, pkg.to
-        )?;
 
         let opts = PublishOpts {
             config,
@@ -182,7 +183,7 @@ fn publish(
             cli_features: CliFeatures::new_all(false),
         };
         cargo::ops::publish(&workspace, &opts)?;
-        thread::sleep(Duration::from_secs(60));
+        thread::sleep(Duration::from_secs(1));
     }
 
     Ok(())

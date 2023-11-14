@@ -100,6 +100,9 @@ pub struct Apply {
     /// Publish the crates
     #[arg(long, short)]
     pub publish: bool,
+    /// Allow dirty working directories to be published
+    #[arg(long)]
+    pub allow_dirty: bool,
     #[arg(default_value = ".")]
     /// Path to the cargo workspace
     pub path: PathBuf,

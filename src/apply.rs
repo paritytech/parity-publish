@@ -168,12 +168,18 @@ fn publish(
             continue;
         }
 
+        writeln!(
+            stdout,
+            "({:3<}/{:3<}) publishing {}-{}...",
+            n, total, pkg.name, pkg.to
+        )?;
+
         let opts = PublishOpts {
             config,
             token: Some(Secret::from(token.clone())),
             index: None,
             verify: pkg.verify && !apply.dry_run,
-            allow_dirty: true,
+            allow_dirty: apply.allow_dirty,
             jobs: None,
             keep_going: false,
             to_publish: Packages::Packages(vec![pkg.name.clone()]),
@@ -183,7 +189,7 @@ fn publish(
             cli_features: CliFeatures::new_all(false),
         };
         cargo::ops::publish(&workspace, &opts)?;
-        thread::sleep(Duration::from_secs(1));
+        thread::sleep(Duration::from_secs(60));
     }
 
     Ok(())

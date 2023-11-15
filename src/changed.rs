@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str::FromStr;
 
@@ -7,9 +7,11 @@ use crate::cli::Changed;
 use anyhow::{bail, Result};
 use cargo::core::dependency::DepKind;
 use cargo::core::Workspace;
+use toml_edit::visit_mut::VisitMut;
 
 pub struct Change {
     pub name: String,
+    pub path: PathBuf,
     pub kind: ChangeKind,
 }
 
@@ -29,7 +31,7 @@ pub async fn handle_changed(diff: Changed) -> Result<()> {
     let crates = get_changed_crates(&workspace, &diff.from, &diff.to)?;
 
     for c in crates {
-        println!("{} {:?}", c.name, c.kind);
+        println!("{} ({}) {:?}", c.name, c.path.display(), c.kind);
     }
 
     Ok(())
@@ -75,8 +77,16 @@ fn find_indirect_changes(w: &Workspace, changed: &mut Vec<Change>) {
 
     for c in dependants {
         if !changed.iter().any(|ch| ch.name == c) {
+            let path = w
+                .members()
+                .find(|cr| cr.name().as_str() == c)
+                .unwrap()
+                .root()
+                .strip_prefix(w.root())
+                .unwrap();
             let change = Change {
                 name: c.to_string(),
+                path: path.to_path_buf(),
                 kind: ChangeKind::Dependency,
             };
             changed.push(change);
@@ -90,6 +100,7 @@ pub fn get_changed_crates(w: &Workspace, from: &str, to: &str) -> Result<Vec<Cha
     let config = w.config();
 
     for c in w.members() {
+        let path = c.root().strip_prefix(w.root()).unwrap();
         let mut src = cargo::sources::PathSource::new(c.root(), c.package_id().source_id(), config);
         src.update().unwrap();
         let src_files = src.list_files(c).unwrap();
@@ -104,6 +115,7 @@ pub fn get_changed_crates(w: &Workspace, from: &str, to: &str) -> Result<Vec<Cha
             if manifest_changed(w.root(), &src_files[0], from, to)? {
                 let change = Change {
                     name: c.name().to_string(),
+                    path: path.to_path_buf(),
                     kind: ChangeKind::Manifest,
                 };
                 changed.push(change);
@@ -111,6 +123,7 @@ pub fn get_changed_crates(w: &Workspace, from: &str, to: &str) -> Result<Vec<Cha
         } else if !src_files.is_empty() {
             let change = Change {
                 name: c.name().to_string(),
+                path: path.to_path_buf(),
                 kind: ChangeKind::Files,
             };
             changed.push(change);
@@ -131,6 +144,18 @@ pub fn get_changed_crates(w: &Workspace, from: &str, to: &str) -> Result<Vec<Cha
 }
 
 fn manifest_changed(root: &Path, path: &str, from: &str, to: &str) -> Result<bool> {
+    struct Sorter;
+
+    impl VisitMut for Sorter {
+        fn visit_table_like_mut(&mut self, node: &mut dyn toml_edit::TableLike) {
+            node.sort_values()
+        }
+
+        fn visit_array_mut(&mut self, node: &mut toml_edit::Array) {
+            node.sort_by_key(|k| k.as_str().unwrap().to_string())
+        }
+    }
+
     let new = get_file(root, path, to)?;
     let old = if let Ok(old) = get_file(root, path, from) {
         old
@@ -138,22 +163,24 @@ fn manifest_changed(root: &Path, path: &str, from: &str, to: &str) -> Result<boo
         return Ok(false);
     };
 
-    let mut old = cargo::util::toml_mut::manifest::Manifest::from_str(&old)?;
-    let mut new = cargo::util::toml_mut::manifest::Manifest::from_str(&new)?;
+    let mut old = toml_edit::Document::from_str(&old)?;
+    let mut new = toml_edit::Document::from_str(&new)?;
 
-    for c in [&mut old, &mut new] {
-        c.data.remove("dependencies");
-        c.data.remove("build-dependencies");
-        c.data.remove("dev-dependencies");
-        c.data
-            .get_mut("package")
-            .unwrap()
-            .as_table_mut()
-            .unwrap()
-            .remove("version");
+    for mut c in [&mut old, &mut new] {
+        c.remove("dependencies");
+        c.remove("build-dependencies");
+        c.remove("dev-dependencies");
+
+        let package = c.get_mut("package").unwrap().as_table_mut().unwrap();
+        package.remove("version");
+        package.remove("description");
+        package.remove("license");
+
+        c.fmt();
+        Sorter.visit_document_mut(&mut c);
     }
 
-    let changed = old.data.to_string() != new.data.to_string();
+    let changed = old.to_string() != new.to_string();
     Ok(changed)
 }
 

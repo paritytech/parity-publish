@@ -63,6 +63,7 @@ pub struct Changed {
     pub path: PathBuf,
     /// The git commit to look for changes from
     pub from: String,
+    #[arg(default_value = "HEAD")]
     /// The git commit to look for changes to
     pub to: String,
 }

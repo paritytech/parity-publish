@@ -78,7 +78,7 @@ pub struct Plan {
     pub all: bool,
     /// Publish crates that have changed since git ref
     #[arg(long)]
-    pub changed: Option<String>,
+    pub since: Option<String>,
     /// don't verify before publishing
     #[arg(long)]
     pub no_verify: bool,

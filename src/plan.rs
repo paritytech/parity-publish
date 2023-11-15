@@ -100,7 +100,7 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
         .await?;
     }
 
-    let changed = if let Some(from) = &plan.changed {
+    let changed = if let Some(from) = &plan.since {
         let changed = changed::get_changed_crates(&workspace, from, "HEAD")?;
         let indirect = changed
             .iter()

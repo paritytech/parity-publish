@@ -44,14 +44,14 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
         let mut manifest = LocalManifest::try_new(&path.join(&pkg.path).join("Cargo.toml"))?;
         let package = manifest.manifest.get_table_mut(&["package".to_string()])?;
         let ver = package.get_mut("version").unwrap();
-        *ver = toml_edit::value(&pkg.to);
+        *ver = toml_edit_cargo::value(&pkg.to);
 
         // hack because come crates don't have a desc
         if package.get("description").is_none() {
             package
                 .as_table_mut()
                 .unwrap()
-                .insert("description", toml_edit::value(&pkg.name));
+                .insert("description", toml_edit_cargo::value(&pkg.name));
         }
 
         for dep in &pkg.rewrite_dep {

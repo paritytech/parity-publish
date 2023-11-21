@@ -107,6 +107,9 @@ pub struct Apply {
     /// Allow dirty working directories to be published
     #[arg(long)]
     pub allow_dirty: bool,
+    /// Don't verify packages before publish
+    #[arg(long)]
+    pub no_verify: bool,
     #[arg(default_value = ".")]
     /// Path to the cargo workspace
     pub path: PathBuf,

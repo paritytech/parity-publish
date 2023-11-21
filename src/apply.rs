@@ -179,7 +179,7 @@ fn publish(
             config,
             token: Some(Secret::from(token.clone())),
             index: None,
-            verify: pkg.verify && !apply.dry_run,
+            verify: pkg.verify && !apply.dry_run && !apply.no_verify,
             allow_dirty: apply.allow_dirty,
             jobs: None,
             keep_going: false,
@@ -190,7 +190,7 @@ fn publish(
             cli_features: CliFeatures::new_all(false),
         };
         cargo::ops::publish(&workspace, &opts)?;
-        thread::sleep(Duration::from_secs(60));
+        thread::sleep(Duration::from_secs(1));
     }
 
     Ok(())

@@ -140,6 +140,7 @@ fn publish(
     token: String,
 ) -> Result<()> {
     let mut stdout = StandardStream::stdout(ColorChoice::Auto);
+    let mut n = 1;
 
     let workspace = Workspace::new(&path.join("Cargo.toml"), config)?;
 
@@ -161,9 +162,7 @@ fn publish(
         total, skipped
     )?;
 
-    for (n, pkg) in plan.crates.iter().filter(|c| c.publish).enumerate() {
-        let n = n + 1;
-
+    for pkg in plan.crates.iter().filter(|c| c.publish) {
         if version_exists(&mut reg, &pkg.name, &pkg.to) {
             continue;
         }
@@ -173,6 +172,8 @@ fn publish(
             "({:3<}/{:3<}) publishing {}-{}...",
             n, total, pkg.name, pkg.to
         )?;
+
+        n += 1;
 
         let opts = PublishOpts {
             config,

@@ -15,6 +15,11 @@ use anyhow::{Context, Result};
 use cargo::core::{dependency::DepKind, Workspace};
 use termcolor::{ColorChoice, ColorSpec, StandardStream, WriteColor};
 
+struct NamePath {
+    name: String,
+    path: PathBuf,
+}
+
 #[derive(Default)]
 struct Issues {
     name: String,
@@ -24,7 +29,7 @@ struct Issues {
     unpublished: bool,
     taken: bool,
     broken_readme: bool,
-    needs_publish: Option<Vec<String>>,
+    needs_publish: Option<Vec<NamePath>>,
 }
 
 impl Issues {
@@ -90,7 +95,7 @@ impl Issues {
                     "    either publish this crate or don't publish the dependants:"
                 )?;
                 for dep in deps {
-                    writeln!(stdout, "        {}", dep)?;
+                    writeln!(stdout, "        {} ({})", dep.name, dep.path.display())?;
                 }
             }
 
@@ -263,24 +268,13 @@ async fn issues(check: &Check) -> Result<Vec<Issues>> {
                         .find(|c| c.name().as_str() == *d)
                         .unwrap()
                 })
-                .map(|c| {
-                    format!(
-                        "{} ({})",
-                        c.name(),
-                        c.manifest_path()
-                            .parent()
-                            .context("no parent")
-                            .unwrap()
-                            .strip_prefix(
-                                workspace
-                                    .root_manifest()
-                                    .parent()
-                                    .context("no parent")
-                                    .unwrap()
-                            )
-                            .unwrap()
-                            .display()
-                    )
+                .map(|c| NamePath {
+                    name: c.name().to_string(),
+                    path: c
+                        .root()
+                        .strip_prefix(workspace.root())
+                        .unwrap()
+                        .to_path_buf(),
                 })
                 .collect()
         });

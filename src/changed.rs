@@ -166,7 +166,7 @@ fn manifest_changed(root: &Path, path: &str, from: &str, to: &str) -> Result<boo
     let mut old = toml_edit::Document::from_str(&old)?;
     let mut new = toml_edit::Document::from_str(&new)?;
 
-    for mut c in [&mut old, &mut new] {
+    for c in [&mut old, &mut new] {
         c.remove("dependencies");
         c.remove("build-dependencies");
         c.remove("dev-dependencies");
@@ -177,7 +177,7 @@ fn manifest_changed(root: &Path, path: &str, from: &str, to: &str) -> Result<boo
         package.remove("license");
 
         c.fmt();
-        Sorter.visit_document_mut(&mut c);
+        Sorter.visit_document_mut(c);
     }
 
     let changed = old.to_string() != new.to_string();

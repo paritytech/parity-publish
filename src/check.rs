@@ -215,9 +215,11 @@ async fn issues(check: &Check) -> Result<Vec<Issues>> {
             .context("no parent")?
             .strip_prefix(workspace.root_manifest().parent().context("no parent")?)?;
 
-        let mut issues = Issues::default();
-        issues.name = c.name().to_string();
-        issues.path = path.to_path_buf();
+        let mut issues = Issues {
+            name: c.name().to_string(),
+            path: path.to_path_buf(),
+            ..Issues::default()
+        };
 
         if c.publish().is_none() {
             match owner {

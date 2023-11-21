@@ -139,7 +139,7 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
 
     writeln!(stdout, "calculating plan...")?;
 
-    let planner = calculate_plan(&plan, order, &mut upstream, workspace_crates, &changed).await?;
+    let planner = calculate_plan(&plan, order, &upstream, workspace_crates, &changed).await?;
 
     let output = toml::to_string_pretty(&planner)?;
     std::fs::write(plan.path.join("Plan.toml"), output)?;

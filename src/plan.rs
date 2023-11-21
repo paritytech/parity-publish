@@ -97,8 +97,7 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
             no_check_owner: false,
             recursive: false,
             quiet: false,
-            paths: false,
-            manifest: false,
+            paths: 0,
         })
         .await?;
     }

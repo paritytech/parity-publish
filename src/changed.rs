@@ -31,9 +31,9 @@ pub async fn handle_changed(diff: Changed) -> Result<()> {
     let crates = get_changed_crates(&workspace, &diff.from, &diff.to)?;
 
     for c in crates {
-        if diff.manifest {
+        if diff.paths >= 2 {
             println!("{}", c.path.join("Cargo.toml").display());
-        } else if diff.paths {
+        } else if diff.paths == 1 {
             println!("{}", c.path.display());
         } else if diff.quiet {
             println!("{}", c.name);

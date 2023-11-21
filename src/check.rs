@@ -53,45 +53,45 @@ impl Issues {
             return Ok(());
         }
 
-        if check.manifest {
+        if check.paths >= 2 {
             writeln!(stdout, "{}", self.path.join("Cargo.toml").display())?;
-        } else if check.paths {
+        } else if check.paths == 1 {
             writeln!(stdout, "{}", self.path.display())?;
         } else if check.quiet {
             writeln!(stdout, "{}", self.name)?;
-        }
+        } else {
+            stdout.set_color(ColorSpec::new().set_bold(true))?;
+            write!(stdout, "{}", self.name)?;
+            stdout.set_color(ColorSpec::new().set_bold(false))?;
+            writeln!(stdout, " ({}):", self.path.display())?;
 
-        stdout.set_color(ColorSpec::new().set_bold(true))?;
-        write!(stdout, "{}", self.name)?;
-        stdout.set_color(ColorSpec::new().set_bold(false))?;
-        writeln!(stdout, " ({}):", self.path.display())?;
-
-        if self.no_desc {
-            writeln!(stdout, "    no description")?;
-        }
-        if self.no_license {
-            writeln!(stdout, "    no license")?;
-        }
-        if self.unpublished {
-            writeln!(stdout, "    unpublished on crates.io")?;
-        }
-        if self.taken {
-            writeln!(stdout, "    owned by some one else on crates.io")?;
-        }
-        if self.broken_readme {
-            writeln!(stdout, "    readme specified in Cargo.toml doesnt exist")?;
-        }
-        if let Some(ref deps) = self.needs_publish {
-            writeln!(
-                stdout,
-                "    \"publish = false\" is set but this crate is a dependency of others"
-            )?;
-            for dep in deps {
-                writeln!(stdout, "        {}", dep)?;
+            if self.no_desc {
+                writeln!(stdout, "    no description")?;
             }
-        }
+            if self.no_license {
+                writeln!(stdout, "    no license")?;
+            }
+            if self.unpublished {
+                writeln!(stdout, "    unpublished on crates.io")?;
+            }
+            if self.taken {
+                writeln!(stdout, "    owned by some one else on crates.io")?;
+            }
+            if self.broken_readme {
+                writeln!(stdout, "    readme specified in Cargo.toml doesnt exist")?;
+            }
+            if let Some(ref deps) = self.needs_publish {
+                writeln!(
+                    stdout,
+                    "    \"publish = false\" is set but this crate is a dependency of others"
+                )?;
+                for dep in deps {
+                    writeln!(stdout, "        {}", dep)?;
+                }
+            }
 
-        writeln!(stdout)?;
+            writeln!(stdout)?;
+        }
 
         Ok(())
     }
@@ -133,6 +133,8 @@ async fn issues(check: &Check) -> Result<Vec<Issues>> {
     } else {
         get_owners(&workspace, &Arc::new(cratesio()?)).await
     };
+
+    writeln!(stderr, "checking crates....")?;
 
     let mut new_publish = BTreeMap::new();
     let mut should_publish = workspace

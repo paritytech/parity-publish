@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use clap::Parser;
+use clap::{ArgAction, Parser};
 
 /// A tool to help with publishing crates
 #[derive(Parser, Debug)]
@@ -57,14 +57,11 @@ pub struct Claim {
 
 #[derive(Parser, Debug)]
 pub struct Changed {
-    /// just print paths
-    #[arg(long, short)]
-    pub paths: bool,
-    #[arg(long, short)]
-    /// just print manifests
-    pub manifest: bool,
-    #[arg(long, short)]
+    /// just print paths, pass twice to print manifests
+    #[arg(long, short, action = ArgAction::Count)]
+    pub paths: u8,
     /// Only print crate names
+    #[arg(long, short)]
     pub quiet: bool,
     #[arg(long, short)]
     pub verbose: bool,
@@ -72,8 +69,8 @@ pub struct Changed {
     pub path: PathBuf,
     /// The git commit to look for changes from
     pub from: String,
-    #[arg(default_value = "HEAD")]
     /// The git commit to look for changes to
+    #[arg(default_value = "HEAD")]
     pub to: String,
 }
 
@@ -135,12 +132,9 @@ pub struct Check {
     #[arg(long, short)]
     /// Only print crate names
     pub quiet: bool,
-    /// just print paths
-    #[arg(long, short)]
-    pub paths: bool,
-    /// just print manifests
-    #[arg(long, short)]
-    pub manifest: bool,
+    #[arg(long, short, action = ArgAction::Count)]
+    /// just print paths, pass twice to print manifests
+    pub paths: u8,
     #[arg(long)]
     /// Dont check ownership status
     pub no_check_owner: bool,

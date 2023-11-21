@@ -58,6 +58,9 @@ pub struct Claim {
 #[derive(Parser, Debug)]
 pub struct Changed {
     #[arg(long, short)]
+    /// Only print crate names
+    pub quiet: bool,
+    #[arg(long, short)]
     pub verbose: bool,
     /// Path to the cargo workspace
     pub path: PathBuf,

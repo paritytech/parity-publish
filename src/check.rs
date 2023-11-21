@@ -88,7 +88,7 @@ impl Issues {
             if let Some(ref deps) = self.needs_publish {
                 writeln!(
                     stdout,
-                    "    \"publish = false\" is set but this crate is a dependency of others"
+                    "    'publish = false' is set but this crate is a dependency of others"
                 )?;
                 writeln!(
                     stdout,

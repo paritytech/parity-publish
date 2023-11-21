@@ -57,6 +57,12 @@ pub struct Claim {
 
 #[derive(Parser, Debug)]
 pub struct Changed {
+    /// just print paths
+    #[arg(long, short)]
+    pub paths: bool,
+    #[arg(long, short)]
+    /// just print manifests
+    pub manifest: bool,
     #[arg(long, short)]
     /// Only print crate names
     pub quiet: bool,
@@ -126,6 +132,15 @@ pub struct Check {
     /// Dont exit 1 on errors that don't prevent publish
     #[arg(long)]
     pub allow_nonfatal: bool,
+    #[arg(long, short)]
+    /// Only print crate names
+    pub quiet: bool,
+    /// just print paths
+    #[arg(long, short)]
+    pub paths: bool,
+    /// just print manifests
+    #[arg(long, short)]
+    pub manifest: bool,
     #[arg(long)]
     /// Dont check ownership status
     pub no_check_owner: bool,

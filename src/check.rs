@@ -48,9 +48,17 @@ impl Issues {
             || unpublished
     }
 
-    fn print(&self, stdout: &mut StandardStream) -> Result<()> {
+    fn print(&self, check: &Check, stdout: &mut StandardStream) -> Result<()> {
         if !self.has_issue() {
             return Ok(());
+        }
+
+        if check.manifest {
+            writeln!(stdout, "{}", self.path.join("Cargo.toml").display())?;
+        } else if check.paths {
+            writeln!(stdout, "{}", self.path.display())?;
+        } else if check.quiet {
+            writeln!(stdout, "{}", self.name)?;
         }
 
         stdout.set_color(ColorSpec::new().set_bold(true))?;
@@ -98,7 +106,7 @@ pub async fn check(check: Check) -> Result<i32> {
     let issues = issues(&check).await?;
 
     for issue in &issues {
-        issue.print(&mut stdout)?;
+        issue.print(&check, &mut stdout)?;
     }
 
     if issues.iter().any(|i| i.ret_err(&check)) {

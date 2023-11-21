@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::fmt::Display;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str::FromStr;
@@ -8,6 +9,7 @@ use crate::cli::Changed;
 use anyhow::{bail, Result};
 use cargo::core::dependency::DepKind;
 use cargo::core::Workspace;
+use termcolor::{ColorChoice, StandardStream};
 use toml_edit::visit_mut::VisitMut;
 use toml_edit::Table;
 
@@ -28,13 +30,14 @@ impl Display for ChangeKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ChangeKind::Files => f.write_str("files"),
-            ChangeKind::Manifest => f.write_str("files"),
-            ChangeKind::Dependency => f.write_str("files"),
+            ChangeKind::Manifest => f.write_str("manifest"),
+            ChangeKind::Dependency => f.write_str("dependency"),
         }
     }
 }
 
 pub async fn handle_changed(diff: Changed) -> Result<()> {
+    let mut stdout = StandardStream::stdout(ColorChoice::Auto);
     let config = cargo::Config::default()?;
     config.shell().set_verbosity(cargo::core::Verbosity::Quiet);
     let path = diff.path.canonicalize()?.join("Cargo.toml");
@@ -44,13 +47,13 @@ pub async fn handle_changed(diff: Changed) -> Result<()> {
 
     for c in crates {
         if diff.paths >= 2 {
-            println!("{}", c.path.join("Cargo.toml").display());
+            writeln!(stdout, "{}", c.path.join("Cargo.toml").display())?;
         } else if diff.paths == 1 {
-            println!("{}", c.path.display());
+            writeln!(stdout, "{}", c.path.display())?;
         } else if diff.quiet {
-            println!("{}", c.name);
+            writeln!(stdout, "{}", c.name)?;
         } else {
-            println!("{} ({}) ({})", c.name, c.path.display(), c.kind);
+            writeln!(stdout, "{} ({}) ({})", c.name, c.path.display(), c.kind)?;
         }
     }
 

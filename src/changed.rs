@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::fmt::Display;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str::FromStr;
@@ -8,6 +9,7 @@ use anyhow::{bail, Result};
 use cargo::core::dependency::DepKind;
 use cargo::core::Workspace;
 use toml_edit::visit_mut::VisitMut;
+use toml_edit::Table;
 
 pub struct Change {
     pub name: String,
@@ -20,6 +22,16 @@ pub enum ChangeKind {
     Files,
     Manifest,
     Dependency,
+}
+
+impl Display for ChangeKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ChangeKind::Files => f.write_str("files"),
+            ChangeKind::Manifest => f.write_str("files"),
+            ChangeKind::Dependency => f.write_str("files"),
+        }
+    }
 }
 
 pub async fn handle_changed(diff: Changed) -> Result<()> {
@@ -38,7 +50,7 @@ pub async fn handle_changed(diff: Changed) -> Result<()> {
         } else if diff.quiet {
             println!("{}", c.name);
         } else {
-            println!("{} ({}) {:?}", c.name, c.path.display(), c.kind);
+            println!("{} ({}) ({})", c.name, c.path.display(), c.kind);
         }
     }
 
@@ -184,7 +196,7 @@ fn manifest_changed(root: &Path, path: &str, from: &str, to: &str) -> Result<boo
         package.remove("description");
         package.remove("license");
 
-        c.fmt();
+        Table::fmt(c);
         Sorter.visit_document_mut(c);
     }
 

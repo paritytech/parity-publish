@@ -85,6 +85,10 @@ impl Issues {
                     stdout,
                     "    \"publish = false\" is set but this crate is a dependency of others"
                 )?;
+                writeln!(
+                    stdout,
+                    "    either publish this crate or don't publish the dependants:"
+                )?;
                 for dep in deps {
                     writeln!(stdout, "        {}", dep)?;
                 }

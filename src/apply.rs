@@ -13,7 +13,14 @@ use cargo::{
 
 use semver::Version;
 
-use std::{env, io::Write, path::Path, thread, time::Duration};
+use std::{
+    env,
+    io::Write,
+    ops::Add,
+    path::Path,
+    thread,
+    time::{Duration, Instant},
+};
 use termcolor::{ColorChoice, StandardStream};
 
 use crate::{cli::Apply, plan::Planner, registry};
@@ -175,6 +182,9 @@ fn publish(
 
         n += 1;
 
+        let wait = Duration::from_secs(60);
+        let now = Instant::now();
+
         let opts = PublishOpts {
             config,
             token: Some(Secret::from(token.clone())),
@@ -190,7 +200,10 @@ fn publish(
             cli_features: CliFeatures::new_all(false),
         };
         cargo::ops::publish(&workspace, &opts)?;
-        thread::sleep(Duration::from_secs(1));
+
+        if let Some(delay) = now.add(wait).checked_duration_since(Instant::now()) {
+            thread::sleep(delay);
+        }
     }
 
     Ok(())

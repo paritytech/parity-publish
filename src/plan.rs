@@ -175,16 +175,15 @@ async fn calculate_plan(
     let old_plan = old_plan(plan);
     let mut planner = Planner::default();
     let mut new_versions = BTreeMap::new();
-    let mut breaking: BTreeSet<String> = BTreeSet::new();
 
     for c in order {
         let upstreamc = upstream.get(c);
         let c = *workspace_crates.get(c).unwrap();
         let mut rewrite = Vec::new();
 
-        let mut publish = is_publish(plan, c, &breaking, changed)?;
+        let mut publish = is_publish(plan, c, changed)?;
 
-        let (from, to) = get_versions(plan, upstreamc, c, publish, &mut breaking, &old_plan)?;
+        let (from, to) = get_versions(plan, upstreamc, c, publish, &old_plan)?;
 
         // if the version is already taken assume it's from a previous pre release and use this
         // version instead of making a new release
@@ -225,7 +224,6 @@ fn get_versions(
     upstreamc: Option<&Vec<Summary>>,
     c: &Package,
     publish: bool,
-    breaking: &mut BTreeSet<String>,
     old_plan: &Planner,
 ) -> Result<(Version, Version)> {
     let from = upstreamc
@@ -281,19 +279,12 @@ fn get_versions(
             to.minor = 0;
             to.patch = 0;
         }
-
-        breaking.insert(c.name().to_string());
     }
 
     Ok((from, to))
 }
 
-fn is_publish(
-    plan: &Plan,
-    c: &Package,
-    breaking: &BTreeSet<String>,
-    changed: &BTreeSet<String>,
-) -> Result<bool> {
+fn is_publish(plan: &Plan, c: &Package, changed: &BTreeSet<String>) -> Result<bool> {
     if c.publish().is_some() {
         return Ok(false);
     }
@@ -303,14 +294,6 @@ fn is_publish(
     }
 
     if plan.crates.iter().any(|p| p == c.name().as_str()) {
-        return Ok(true);
-    }
-
-    if c.dependencies()
-        .iter()
-        .filter(|d| d.kind() != DepKind::Development)
-        .any(|d| breaking.contains(d.package_name().as_str()))
-    {
         return Ok(true);
     }
 

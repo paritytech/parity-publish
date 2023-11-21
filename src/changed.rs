@@ -9,7 +9,7 @@ use crate::cli::Changed;
 use anyhow::{bail, Result};
 use cargo::core::dependency::DepKind;
 use cargo::core::Workspace;
-use termcolor::{ColorChoice, StandardStream};
+use termcolor::{ColorChoice, ColorSpec, StandardStream, WriteColor};
 use toml_edit::visit_mut::VisitMut;
 use toml_edit::Table;
 
@@ -53,7 +53,12 @@ pub async fn handle_changed(diff: Changed) -> Result<()> {
         } else if diff.quiet {
             writeln!(stdout, "{}", c.name)?;
         } else {
-            writeln!(stdout, "{} ({}) ({})", c.name, c.path.display(), c.kind)?;
+            stdout.set_color(ColorSpec::new().set_bold(true))?;
+            write!(stdout, "{}", c.name)?;
+            stdout.set_color(ColorSpec::new().set_bold(false))?;
+            writeln!(stdout, " ({}):", c.path.display())?;
+            writeln!(stdout, "    {}", c.kind)?;
+            writeln!(stdout)?;
         }
     }
 

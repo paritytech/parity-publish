@@ -122,7 +122,7 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
 
     let order = order(&mut stdout, &workspace)?;
 
-    let _lock = config.acquire_package_cache_lock()?;
+    let _lock = workspace.config().acquire_package_cache_lock()?;
     let mut reg = registry::get_registry(&workspace)?;
 
     writeln!(stdout, "looking up crates...",)?;
@@ -142,7 +142,15 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
 
     writeln!(stdout, "calculating plan...")?;
 
-    let planner = calculate_plan(&plan, order, &upstream, workspace_crates, &changed).await?;
+    let planner = calculate_plan(
+        &plan,
+        order,
+        &workspace,
+        &upstream,
+        workspace_crates,
+        &changed,
+    )
+    .await?;
 
     let output = toml::to_string_pretty(&planner)?;
     std::fs::write(plan.path.join("Plan.toml"), output)?;
@@ -159,11 +167,11 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
 async fn calculate_plan(
     plan: &Plan,
     order: Vec<&str>,
+    workspace: &Workspace<'_>,
     upstream: &BTreeMap<String, Vec<Summary>>,
     workspace_crates: BTreeMap<&str, &Package>,
     changed: &BTreeSet<String>,
 ) -> Result<Planner> {
-    let manifest_path = plan.path.canonicalize()?.join("Cargo.toml");
     let old_plan = old_plan(plan);
     let mut planner = Planner::default();
     let mut new_versions = BTreeMap::new();
@@ -201,10 +209,8 @@ async fn calculate_plan(
             reason: "changed".to_string(),
             rewrite_dep: rewrite,
             path: c
-                .manifest_path()
-                .parent()
-                .unwrap()
-                .strip_prefix(manifest_path.parent().unwrap())
+                .root()
+                .strip_prefix(workspace.root())
                 .unwrap()
                 .to_path_buf(),
             remove_feature: remove,

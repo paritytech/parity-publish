@@ -69,7 +69,7 @@ pub async fn handle_claim(claim: Claim) -> Result<()> {
 
                 let manifest = write_manifest(&member.name())?;
                 let opts = PublishOpts {
-                    config: &config,
+                    config: workspace.config(),
                     token: Some(token.clone().into()),
                     index: None,
                     verify: false,

@@ -217,11 +217,7 @@ async fn issues(check: &Check) -> Result<Vec<Issues>> {
     }
 
     for (c, owner) in workspace.members().zip(owners) {
-        let path = c
-            .manifest_path()
-            .parent()
-            .context("no parent")?
-            .strip_prefix(workspace.root_manifest().parent().context("no parent")?)?;
+        let path = c.root().strip_prefix(workspace.root())?;
 
         let mut issues = Issues {
             name: c.name().to_string(),

@@ -12,6 +12,7 @@ use termcolor::{ColorChoice, StandardStream};
 use crate::{
     changed, check,
     cli::{Check, Plan},
+    edit::RemoveCrate,
     registry,
     shared::*,
 };
@@ -22,6 +23,10 @@ pub struct Planner {
     #[serde(default)]
     #[serde(rename = "crate")]
     pub crates: Vec<Publish>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
+    #[serde(rename = "remove_crate")]
+    pub remove_crates: Vec<RemoveCrate>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default)]
@@ -128,6 +133,14 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
             c.name().to_string(),
             registry::get_crate(&mut reg, c.name()).unwrap(),
         );
+        for dep in c.dependencies() {
+            if dep.source_id().is_git() || dep.source_id().is_path() {
+                upstream.insert(
+                    dep.package_name().to_string(),
+                    registry::get_crate(&mut reg, c.name()).unwrap(),
+                );
+            }
+        }
     }
 
     let workspace_crates = workspace
@@ -194,7 +207,8 @@ async fn calculate_plan(
 
         let remove = remove_dev_features(c);
 
-        let remove_deps = remove_git_deps(c, &workspace_crates, upstream);
+        let remove_deps =
+            remove_git_deps(c, &workspace_crates, upstream, &mut planner.remove_crates);
 
         planner.crates.push(Publish {
             publish,
@@ -306,6 +320,7 @@ fn remove_git_deps(
     cra: &Package,
     workspace_crates: &BTreeMap<&str, &Package>,
     upstream: &BTreeMap<String, Vec<Summary>>,
+    remove_crate: &mut Vec<RemoveCrate>,
 ) -> Vec<RemoveDep> {
     let mut remove_deps = Vec::new();
 
@@ -318,14 +333,23 @@ fn remove_git_deps(
         .iter()
         .filter(|d| d.kind() != DepKind::Development)
     {
-        if dep.source_id().is_git() && dep.is_optional() {
+        if dep.source_id().is_git() {
             if !workspace_crates.contains_key(dep.package_name().as_str()) {
                 if !upstream.contains_key(dep.package_name().as_str()) {
-                    let remove = RemoveDep {
-                        name: dep.package_name().to_string(),
-                        package: None,
-                    };
-                    remove_deps.push(remove);
+                    if dep.is_optional() {
+                        let remove = RemoveDep {
+                            name: dep.package_name().to_string(),
+                            package: None,
+                        };
+                        remove_deps.push(remove);
+                    } else {
+                        let remove = RemoveCrate {
+                            name: dep.package_name().to_string(),
+                        };
+                        if !remove_crate.contains(&remove) {
+                            remove_crate.push(remove);
+                        }
+                    }
                 }
             }
         }

@@ -367,11 +367,7 @@ fn remove_dev_features(member: &Package) -> Vec<RemoveFeature> {
             let dep_name = match need {
                 FeatureValue::Feature(_) => continue,
                 FeatureValue::Dep { dep_name } => dep_name.as_str(),
-                FeatureValue::DepFeature {
-                    dep_name,
-                    dep_feature: _,
-                    weak: _,
-                } => dep_name.as_str(),
+                FeatureValue::DepFeature { dep_name, .. } => dep_name.as_str(),
             };
 
             if dev.contains(dep_name) {

@@ -187,7 +187,7 @@ async fn calculate_plan(
 
         rewrite_deps(plan, c, &workspace_crates, upstream, &mut rewrite).await?;
 
-        let remove = remove_features(c);
+        let remove = remove_dev_features(c);
 
         planner.crates.push(Publish {
             publish,
@@ -343,7 +343,7 @@ async fn rewrite_deps(
     Ok(())
 }
 
-fn remove_features(member: &Package) -> Vec<RemoveFeature> {
+fn remove_dev_features(member: &Package) -> Vec<RemoveFeature> {
     let mut remove = Vec::new();
     let mut dev = BTreeSet::new();
     let mut non_dev = BTreeSet::new();

@@ -24,5 +24,6 @@ async fn main() -> Result<()> {
         cli::Command::Plan(plan) => plan::handle_plan(plan).await,
         cli::Command::Apply(apply) => apply::handle_apply(apply).await,
         cli::Command::Check(check) => check::handle_check(check).await,
+        cli::Command::Config(config) => config::handle_config(config),
     }
 }

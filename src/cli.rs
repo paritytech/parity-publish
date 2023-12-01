@@ -24,6 +24,8 @@ pub enum Command {
     Apply(Apply),
     /// Check crates are okay to publish
     Check(Check),
+    /// Manage Plan.config
+    Config(Config),
 }
 
 #[derive(Parser, Debug)]
@@ -144,4 +146,14 @@ pub struct Check {
     #[arg(long, short)]
     /// recursively find what crates depend on unpublished crates
     pub recursive: bool,
+}
+
+#[derive(Parser, Debug)]
+pub struct Config {
+    #[arg(default_value = ".")]
+    /// Path to the cargo workspace
+    pub path: PathBuf,
+    #[arg(long)]
+    /// Apply changes specified in Plan.config
+    pub apply: bool,
 }

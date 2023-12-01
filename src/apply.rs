@@ -47,24 +47,7 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
 
     writeln!(stdout, "rewriting manifests...")?;
 
-    for pkg in &config.crates {
-        let c = workspace
-            .members()
-            .find(|c| c.name().as_str() == pkg.name)
-            .context("can't find crate")?;
-        let path = c.root();
-        let mut manifest = LocalManifest::try_new(&path.join(path).join("Cargo.toml"))?;
-
-        for remove_feature in &pkg.remove_feature {
-            edit::remove_feature(&mut manifest, remove_feature)?;
-        }
-
-        for remove_dep in &pkg.remove_dep {
-            edit::remove_dep(&mut manifest, remove_dep)?;
-        }
-
-        manifest.write()?;
-    }
+    config::apply_config(&workspace, &config)?;
 
     for pkg in &plan.crates {
         let mut manifest = LocalManifest::try_new(&path.join(&pkg.path).join("Cargo.toml"))?;

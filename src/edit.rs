@@ -1,11 +1,18 @@
 use std::path::Path;
 
 use anyhow::{Context, Result};
+use cargo::core::Workspace;
 use cargo::util::toml_mut::dependency::RegistrySource;
 use cargo::util::toml_mut::manifest::LocalManifest;
 use cargo::{core::dependency::DepKind, util::toml_mut::dependency::PathSource};
+use toml_edit::Document;
 
 use crate::plan::{Planner, RemoveDep, RemoveFeature, RewriteDep};
+
+#[derive(serde::Serialize, serde::Deserialize, Default)]
+pub struct RemoveCrate {
+    pub name: String,
+}
 
 pub fn rewrite_deps(
     workspace_path: &Path,
@@ -129,5 +136,28 @@ pub fn set_version(manifest: &mut LocalManifest, new_ver: &str) -> Result<()> {
     let package = manifest.manifest.get_table_mut(&["package".to_string()])?;
     let ver = package.get_mut("version").unwrap();
     *ver = toml_edit_cargo::value(new_ver);
+    Ok(())
+}
+
+pub fn remove_crate(
+    workspace: &Workspace,
+    manifest: &mut Document,
+    remove_c: &RemoveCrate,
+) -> Result<()> {
+    let path = workspace
+        .members()
+        .find(|c| c.name().as_str() == remove_c.name)
+        .map(|c| c.root());
+
+    if let Some(path) = path {
+        let path = path.strip_prefix(workspace.root())?;
+        if let Some(workspace) = manifest.get_mut("workspace") {
+            let workspace = workspace.as_table_mut().context("not a table")?;
+            if let Some(members) = workspace.get_mut("members") {
+                let members = members.as_array_mut().context("not an array")?;
+                members.retain(|m| Path::new(m.as_str().unwrap()) != path)
+            }
+        }
+    }
     Ok(())
 }

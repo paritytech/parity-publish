@@ -82,8 +82,8 @@ pub fn remove_dep(manifest: &mut LocalManifest, dep: &RemoveDep) -> Result<()> {
     for (kind, mut table) in manifest.get_sections() {
         let table = table.as_table_like_mut().context("not a table")?;
 
-        if let Some(exiting_dep) = exisiting_deps.iter().find(|(t, _)| t.kind() == kind.kind()) {
-            if let Ok(dep) = &exiting_dep.1 {
+        if let Some(existing_dep) = exisiting_deps.iter().find(|(t, _)| t.kind() == kind.kind()) {
+            if let Ok(dep) = &existing_dep.1 {
                 let toml_name = &dep.name;
                 table.remove(toml_name);
             }

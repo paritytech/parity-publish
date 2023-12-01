@@ -255,7 +255,6 @@ async fn calculate_plan(
     for c in order {
         let upstreamc = upstream.get(c);
         let c = *workspace_crates.get(c).unwrap();
-        let mut rewrite = Vec::new();
 
         let mut publish_reason = is_publish(plan, c, changed)?;
 
@@ -271,10 +270,8 @@ async fn calculate_plan(
 
         new_versions.insert(c.name().to_string(), to.to_string());
 
-        rewrite_deps(plan, c, &workspace_crates, upstream, &mut rewrite).await?;
-
-        let remove = remove_dev_features(c);
-
+        let rewrite_deps = rewrite_deps(plan, c, &workspace_crates, upstream).await?;
+        let remove_features = remove_dev_features(c);
         let remove_deps =
             remove_git_deps(c, &workspace_crates, upstream, &mut planner.remove_crates);
 
@@ -285,13 +282,13 @@ async fn calculate_plan(
             to: to.to_string(),
             bump: BumpKind::Major,
             reason: publish_reason,
-            rewrite_dep: rewrite,
+            rewrite_dep: rewrite_deps,
             path: c
                 .root()
                 .strip_prefix(workspace.root())
                 .unwrap()
                 .to_path_buf(),
-            remove_feature: remove,
+            remove_feature: remove_features,
             remove_dep: remove_deps,
             verify: !plan.no_verify,
         });
@@ -437,8 +434,9 @@ async fn rewrite_deps(
     cra: &Package,
     workspace_crates: &BTreeMap<&str, &Package>,
     upstream: &BTreeMap<String, Vec<Summary>>,
-    rewrite: &mut Vec<RewriteDep>,
-) -> Result<()> {
+) -> Result<Vec<RewriteDep>> {
+    let mut rewrite = Vec::new();
+
     for dep in cra.dependencies() {
         if dep.source_id().is_git() || dep.source_id().is_path() {
             if let Some(dep_crate) = workspace_crates.get(dep.package_name().as_str()) {
@@ -478,7 +476,7 @@ async fn rewrite_deps(
         }
     }
 
-    Ok(())
+    Ok(rewrite)
 }
 
 fn remove_dev_features(member: &Package) -> Vec<RemoveFeature> {

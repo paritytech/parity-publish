@@ -11,7 +11,11 @@ use crate::{
 #[derive(serde::Serialize, serde::Deserialize, Default)]
 pub struct Crate {
     pub name: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub remove_feature: Vec<RemoveFeature>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub remove_dep: Vec<RemoveDep>,
 }
 

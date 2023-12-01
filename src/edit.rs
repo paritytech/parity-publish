@@ -5,7 +5,7 @@ use cargo::util::toml_mut::dependency::RegistrySource;
 use cargo::util::toml_mut::manifest::LocalManifest;
 use cargo::{core::dependency::DepKind, util::toml_mut::dependency::PathSource};
 
-use crate::plan::{Planner, RemoveFeature, RewriteDep};
+use crate::plan::{Planner, RemoveDep, RemoveFeature, RewriteDep};
 
 pub fn rewrite_deps(
     workspace_path: &Path,
@@ -67,6 +67,25 @@ pub fn rewrite_deps(
                     let existing_dep = existing_dep.set_source(source);
                     manifest.insert_into_table(&table, &existing_dep)?;
                 }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+pub fn remove_dep(manifest: &mut LocalManifest, dep: &RemoveDep) -> Result<()> {
+    let exisiting_deps = manifest
+        .get_dependency_versions(&dep.name)
+        .collect::<Vec<_>>();
+
+    for (kind, mut table) in manifest.get_sections() {
+        let table = table.as_table_like_mut().context("not a table")?;
+
+        if let Some(exiting_dep) = exisiting_deps.iter().find(|(t, _)| t.kind() == kind.kind()) {
+            if let Ok(dep) = &exiting_dep.1 {
+                let toml_name = &dep.name;
+                table.remove(toml_name);
             }
         }
     }

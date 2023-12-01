@@ -17,7 +17,7 @@ use std::{
 };
 use termcolor::{ColorChoice, StandardStream};
 
-use crate::{cli::Apply, edit, plan::Planner, registry};
+use crate::{cli::Apply, config, edit, plan::Planner, registry};
 
 pub async fn handle_apply(apply: Apply) -> Result<()> {
     let path = apply.path.canonicalize()?;
@@ -29,8 +29,14 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
 
     let mut stdout = StandardStream::stdout(ColorChoice::Auto);
 
-    let config = cargo::Config::default()?;
-    config.shell().set_verbosity(cargo::core::Verbosity::Quiet);
+    let cargo_config = cargo::Config::default()?;
+    cargo_config
+        .shell()
+        .set_verbosity(cargo::core::Verbosity::Quiet);
+
+    let workspace = Workspace::new(&path.join("Cargo.toml"), &cargo_config)?;
+
+    let config = config::read_config(&path)?;
 
     let token = if apply.publish {
         env::var("PARITY_PUBLISH_CRATESIO_TOKEN")
@@ -40,6 +46,25 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
     };
 
     writeln!(stdout, "rewriting manifests...")?;
+
+    for pkg in &config.crates {
+        let c = workspace
+            .members()
+            .find(|c| c.name().as_str() == pkg.name)
+            .context("can't find crate")?;
+        let path = c.root();
+        let mut manifest = LocalManifest::try_new(&path.join(path).join("Cargo.toml"))?;
+
+        for remove_feature in &pkg.remove_feature {
+            edit::remove_feature(&mut manifest, remove_feature)?;
+        }
+
+        for remove_dep in &pkg.remove_dep {
+            edit::remove_dep(&mut manifest, remove_dep)?;
+        }
+
+        manifest.write()?;
+    }
 
     for pkg in &plan.crates {
         let mut manifest = LocalManifest::try_new(&path.join(&pkg.path).join("Cargo.toml"))?;
@@ -58,7 +83,7 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
         return Ok(());
     }
 
-    publish(&apply, &config, plan, &path, token)
+    publish(&apply, &cargo_config, plan, &path, token)
 }
 
 fn publish(

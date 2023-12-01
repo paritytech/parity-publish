@@ -2,10 +2,11 @@ use std::{fs::read_to_string, path::Path};
 
 use anyhow::{Context, Result};
 
-use crate::{plan::RemoveFeature, shared::*};
+use crate::plan::{RemoveDep, RemoveFeature};
 
 #[derive(serde::Serialize, serde::Deserialize, Default)]
 pub struct Crate {
+    pub name: String,
     pub remove_feature: Vec<RemoveFeature>,
     pub remove_dep: Vec<RemoveDep>,
 }
@@ -18,15 +19,9 @@ pub struct Config {
     pub crates: Vec<Crate>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Default)]
-pub struct RemoveDep {
-    pub name: String,
-    #[serde(skip_serializing_if = "is_default")]
-    #[serde(default)]
-    pub value: Option<String>,
-}
-
 pub fn read_config(path: &Path) -> Result<Config> {
+    let path = path.join("Plan.config");
+
     if !path.exists() {
         return Ok(Default::default());
     }

@@ -76,11 +76,17 @@ pub fn rewrite_deps(
 
 pub fn remove_feature(manifest: &mut LocalManifest, remove_feature: &RemoveFeature) -> Result<()> {
     let features = manifest.manifest.get_table_mut(&["features".to_string()])?;
-    for feature in features.as_table_mut().unwrap().iter_mut() {
-        if feature.0 == remove_feature.feature {
-            let needs = feature.1.as_array_mut().unwrap();
-            needs.retain(|need| need.as_str().unwrap() != remove_feature.value);
+    let features = features.as_table_mut().context("not a table")?;
+
+    if let Some(value) = &remove_feature.value {
+        for feature in features.iter_mut() {
+            if feature.0 == remove_feature.feature {
+                let needs = feature.1.as_array_mut().unwrap();
+                needs.retain(|need| need.as_str().unwrap() != value);
+            }
         }
+    } else {
+        features.remove(&remove_feature.feature);
     }
 
     Ok(())

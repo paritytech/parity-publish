@@ -68,7 +68,9 @@ pub struct RemoveDep {
 #[derive(serde::Serialize, serde::Deserialize, Default)]
 pub struct RemoveFeature {
     pub feature: String,
-    pub value: String,
+    #[serde(skip_serializing_if = "is_default")]
+    #[serde(default)]
+    pub value: Option<String>,
 }
 
 pub async fn handle_plan(plan: Plan) -> Result<()> {

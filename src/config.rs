@@ -2,7 +2,7 @@ use std::{fs::read_to_string, path::Path};
 
 use anyhow::{Context, Result};
 
-use crate::shared::*;
+use crate::{plan::RemoveFeature, shared::*};
 
 #[derive(serde::Serialize, serde::Deserialize, Default)]
 pub struct Crate {
@@ -16,14 +16,6 @@ pub struct Config {
     #[serde(default)]
     #[serde(rename = "crate")]
     pub crates: Vec<Crate>,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Default)]
-pub struct RemoveFeature {
-    pub feature: String,
-    #[serde(skip_serializing_if = "is_default")]
-    #[serde(default)]
-    pub value: Option<String>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default)]

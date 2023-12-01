@@ -17,6 +17,19 @@ use crate::{
     shared::*,
 };
 
+#[derive(serde::Serialize, serde::Deserialize, Default, PartialEq, Eq)]
+pub enum BumpKind {
+    #[serde(rename = "major")]
+    Major,
+    #[serde(rename = "minor")]
+    Minor,
+    #[serde(rename = "patch")]
+    Patch,
+    #[default]
+    #[serde(rename = "none")]
+    None,
+}
+
 #[derive(serde::Serialize, serde::Deserialize)]
 pub enum PublishReason {
     #[serde(rename = "manually specified")]
@@ -48,7 +61,9 @@ pub struct Publish {
     pub path: PathBuf,
     pub from: String,
     pub to: String,
-    pub bump: String,
+    #[serde(skip_serializing_if = "is_default")]
+    #[serde(default)]
+    pub bump: BumpKind,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
     pub reason: Option<PublishReason>,
@@ -226,7 +241,7 @@ async fn calculate_plan(
             name: c.name().to_string(),
             from: from.to_string(),
             to: to.to_string(),
-            bump: "unknown".to_string(),
+            bump: BumpKind::Major,
             reason: publish_reason,
             rewrite_dep: rewrite,
             path: c

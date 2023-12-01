@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use cargo::{
     core::{dependency::DepKind, resolver::CliFeatures, FeatureValue, Package, Workspace},
     ops::{Packages, PublishOpts},
-    util::{auth::Secret, toml_mut::manifest::LocalManifest},
+    util::toml_mut::manifest::LocalManifest,
 };
 
 use semver::Version;
@@ -139,7 +139,7 @@ fn publish(
 
         let opts = PublishOpts {
             config,
-            token: Some(Secret::from(token.clone())),
+            token: Some(token.clone().into()),
             index: None,
             verify: pkg.verify && !apply.dry_run && !apply.no_verify,
             allow_dirty: apply.allow_dirty,

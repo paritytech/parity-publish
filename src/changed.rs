@@ -19,7 +19,7 @@ pub struct Change {
     pub kind: ChangeKind,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum ChangeKind {
     Files,
     Manifest,
@@ -42,10 +42,15 @@ pub async fn handle_changed(diff: Changed) -> Result<()> {
     config.shell().set_verbosity(cargo::core::Verbosity::Quiet);
     let path = diff.path.canonicalize()?.join("Cargo.toml");
     let workspace = Workspace::new(&path, &config)?;
+    let deps = !diff.no_deps && !diff.manifests;
 
-    let crates = get_changed_crates(&workspace, !diff.no_deps, &diff.from, &diff.to)?;
+    let crates = get_changed_crates(&workspace, deps, &diff.from, &diff.to)?;
 
     for c in crates {
+        if diff.manifests && c.kind != ChangeKind::Manifest {
+            continue;
+        }
+
         if diff.paths >= 2 {
             writeln!(stdout, "{}", c.path.join("Cargo.toml").display())?;
         } else if diff.paths == 1 {

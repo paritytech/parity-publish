@@ -70,6 +70,9 @@ pub struct Changed {
     /// Don't include packages that have has a dependency change
     #[arg(long, short = 'd')]
     pub no_deps: bool,
+    /// Only show packages where the manifest changed
+    #[arg(long, short)]
+    pub manifests: bool,
     /// Path to the cargo workspace
     pub path: PathBuf,
     /// The git commit to look for changes from

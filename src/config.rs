@@ -73,7 +73,7 @@ pub fn apply_config(workspace: &Workspace, config: &Config) -> Result<()> {
         }
 
         for remove_dep in &pkg.remove_dep {
-            edit::remove_dep(&mut manifest, remove_dep)?;
+            edit::remove_dep(&workspace, &mut manifest, remove_dep)?;
         }
 
         manifest.write()?;

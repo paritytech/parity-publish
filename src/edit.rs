@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use cargo::core::{FeatureValue, Workspace};
 use cargo::util::toml_mut::dependency::RegistrySource;
 use cargo::util::toml_mut::manifest::LocalManifest;
@@ -81,7 +81,11 @@ pub fn rewrite_deps(
     Ok(())
 }
 
-pub fn remove_dep(manifest: &mut LocalManifest, dep: &RemoveDep) -> Result<()> {
+pub fn remove_dep(
+    workspace: &Workspace,
+    manifest: &mut LocalManifest,
+    dep: &RemoveDep,
+) -> Result<()> {
     let mut removed = Vec::new();
 
     let exiting_deps = manifest
@@ -94,6 +98,14 @@ pub fn remove_dep(manifest: &mut LocalManifest, dep: &RemoveDep) -> Result<()> {
             .map(|s| s.to_string())
             .collect::<Vec<_>>();
         if let Ok(dep) = dep {
+            if !dep.optional.unwrap_or(false) {
+                bail!(
+                    "can't remove dependency {} from {} as it is not optional ({})",
+                    dep.name,
+                    manifest.package_name().unwrap_or("unknown"),
+                    manifest.path.strip_prefix(workspace.root())?.display()
+                );
+            }
             manifest.remove_from_table(&table, dep.toml_key())?;
             removed.push(dep.toml_key().to_string());
         }

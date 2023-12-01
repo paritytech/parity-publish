@@ -39,7 +39,7 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
         String::new()
     };
 
-    writeln!(stdout, "rewriting deps...")?;
+    writeln!(stdout, "rewriting manifests...")?;
 
     for pkg in &plan.crates {
         let mut manifest = LocalManifest::try_new(&path.join(&pkg.path).join("Cargo.toml"))?;

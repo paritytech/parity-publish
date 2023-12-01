@@ -13,22 +13,13 @@ use crate::{
     changed, check,
     cli::{Check, Plan},
     registry,
+    shared::*,
 };
-
-fn is_default<T: Default + PartialEq>(t: &T) -> bool {
-    *t == Default::default()
-}
-
-fn is_not_default<T: Default + PartialEq>(t: &T) -> bool {
-    *t != Default::default()
-}
-
-fn bool_true() -> bool {
-    true
-}
 
 #[derive(serde::Serialize, serde::Deserialize, Default)]
 pub struct Planner {
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     #[serde(rename = "crate")]
     pub crates: Vec<Publish>,
 }

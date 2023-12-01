@@ -51,3 +51,15 @@ pub async fn get_owners(
         .collect();
     owners
 }
+
+pub fn is_default<T: Default + PartialEq>(t: &T) -> bool {
+    *t == Default::default()
+}
+
+pub fn is_not_default<T: Default + PartialEq>(t: &T) -> bool {
+    *t != Default::default()
+}
+
+pub fn bool_true() -> bool {
+    true
+}

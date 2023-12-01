@@ -9,7 +9,7 @@ use toml_edit::Document;
 
 use crate::plan::{Planner, RemoveDep, RemoveFeature, RewriteDep};
 
-#[derive(serde::Serialize, serde::Deserialize, Default)]
+#[derive(serde::Serialize, serde::Deserialize, Default, Eq, PartialEq)]
 pub struct RemoveCrate {
     pub name: String,
 }

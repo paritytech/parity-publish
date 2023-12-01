@@ -40,6 +40,9 @@ pub struct Publish {
     pub rewrite_dep: Vec<RewriteDep>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(default)]
+    pub remove_dep: Vec<RemoveDep>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub remove_feature: Vec<RemoveFeature>,
     #[serde(skip_serializing_if = "is_not_default")]
     #[serde(default = "bool_true")]
@@ -59,7 +62,7 @@ pub struct RewriteDep {
     //pub dev: bool,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, Default)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Default, PartialOrd, Ord, PartialEq, Eq)]
 pub struct RemoveDep {
     pub name: String,
     pub package: Option<String>,
@@ -191,6 +194,8 @@ async fn calculate_plan(
 
         let remove = remove_dev_features(c);
 
+        let remove_deps = remove_git_deps(c, &workspace_crates, upstream);
+
         planner.crates.push(Publish {
             publish,
             name: c.name().to_string(),
@@ -205,6 +210,7 @@ async fn calculate_plan(
                 .unwrap()
                 .to_path_buf(),
             remove_feature: remove,
+            remove_dep: remove_deps,
             verify: !plan.no_verify,
         });
     }
@@ -294,6 +300,40 @@ fn is_publish(plan: &Plan, c: &Package, changed: &BTreeSet<String>) -> Result<bo
     }
 
     Ok(false)
+}
+
+fn remove_git_deps(
+    cra: &Package,
+    workspace_crates: &BTreeMap<&str, &Package>,
+    upstream: &BTreeMap<String, Vec<Summary>>,
+) -> Vec<RemoveDep> {
+    let mut remove_deps = Vec::new();
+
+    if cra.publish().is_some() {
+        return Vec::new();
+    }
+
+    for dep in cra
+        .dependencies()
+        .iter()
+        .filter(|d| d.kind() != DepKind::Development)
+    {
+        if dep.source_id().is_git() && dep.is_optional() {
+            if !workspace_crates.contains_key(dep.package_name().as_str()) {
+                if !upstream.contains_key(dep.package_name().as_str()) {
+                    let remove = RemoveDep {
+                        name: dep.package_name().to_string(),
+                        package: None,
+                    };
+                    remove_deps.push(remove);
+                }
+            }
+        }
+    }
+
+    remove_deps.sort();
+    remove_deps.dedup();
+    remove_deps
 }
 
 async fn rewrite_deps(

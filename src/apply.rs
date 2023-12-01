@@ -53,6 +53,11 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
         let mut manifest = LocalManifest::try_new(&path.join(&pkg.path).join("Cargo.toml"))?;
         edit::set_version(&mut manifest, &pkg.to)?;
         edit::fix_description(&mut manifest, &pkg.name)?;
+
+        for remove_dep in &pkg.remove_dep {
+            edit::remove_dep(&workspace, &mut manifest, remove_dep)?;
+        }
+
         edit::rewrite_deps(&path, &plan, &mut manifest, &pkg.rewrite_dep)?;
 
         for remove_feature in &pkg.remove_feature {

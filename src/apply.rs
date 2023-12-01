@@ -1,14 +1,8 @@
 use anyhow::{Context, Result};
 use cargo::{
-    core::{dependency::DepKind, resolver::CliFeatures, Workspace},
+    core::{resolver::CliFeatures, Workspace},
     ops::{Packages, PublishOpts},
-    util::{
-        auth::Secret,
-        toml_mut::{
-            dependency::{PathSource, RegistrySource},
-            manifest::LocalManifest,
-        },
-    },
+    util::{auth::Secret, toml_mut::manifest::LocalManifest},
 };
 
 use semver::Version;
@@ -23,7 +17,7 @@ use std::{
 };
 use termcolor::{ColorChoice, StandardStream};
 
-use crate::{cli::Apply, plan::Planner, registry};
+use crate::{cli::Apply, edit, plan::Planner, registry};
 
 pub async fn handle_apply(apply: Apply) -> Result<()> {
     let path = apply.path.canonicalize()?;
@@ -49,84 +43,12 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
 
     for pkg in &plan.crates {
         let mut manifest = LocalManifest::try_new(&path.join(&pkg.path).join("Cargo.toml"))?;
-        let package = manifest.manifest.get_table_mut(&["package".to_string()])?;
-        let ver = package.get_mut("version").unwrap();
-        *ver = toml_edit_cargo::value(&pkg.to);
-
-        // hack because come crates don't have a desc
-        if package.get("description").is_none() {
-            package
-                .as_table_mut()
-                .unwrap()
-                .insert("description", toml_edit_cargo::value(&pkg.name));
-        }
-
-        for dep in &pkg.rewrite_dep {
-            let exisiting_deps = manifest
-                .get_dependency_versions(&dep.name)
-                .collect::<Vec<_>>();
-
-            let toml_name = exisiting_deps
-                .iter()
-                .find_map(|d| d.1.as_ref().ok())
-                .context("coultnt find dep")?;
-            let toml_name = toml_name.name.as_str();
-
-            let mut new_ver = if let Some(v) = &dep.version {
-                v.to_string()
-            } else {
-                plan.crates
-                    .iter()
-                    .find(|c| c.name == toml_name)
-                    .context("cant find package")?
-                    .to
-                    .clone()
-            };
-
-            if dep.exact {
-                new_ver = format!("={}", new_ver);
-            }
-
-            for exisiting_dep in exisiting_deps {
-                let (table, exisiting_dep) = exisiting_dep;
-                let mut existing_dep = exisiting_dep?;
-                let dev = table.kind() == DepKind::Development;
-
-                if existing_dep.toml_key() == dep.name {
-                    let table = table
-                        .to_table()
-                        .iter()
-                        .map(|s| s.to_string())
-                        .collect::<Vec<_>>();
-
-                    if let Some(path) = &dep.path {
-                        let path = apply.path.canonicalize()?.join(path);
-                        let mut source = PathSource::new(&path);
-
-                        if dev {
-                            existing_dep = existing_dep.clear_version();
-                        } else {
-                            source = source.set_version(&new_ver);
-                        }
-                        let existing_dep = existing_dep.set_source(source);
-                        manifest.insert_into_table(&table, &existing_dep)?;
-                    } else {
-                        let source = RegistrySource::new(&new_ver);
-                        let existing_dep = existing_dep.set_source(source);
-                        manifest.insert_into_table(&table, &existing_dep)?;
-                    }
-                }
-            }
-        }
+        edit::set_version(&mut manifest, &pkg.to)?;
+        edit::fix_description(&mut manifest, &pkg.name)?;
+        edit::rewrite_deps(&path, &plan, &mut manifest, &pkg.rewrite_dep)?;
 
         for remove_feature in &pkg.remove_feature {
-            let features = manifest.manifest.get_table_mut(&["features".to_string()])?;
-            for feature in features.as_table_mut().unwrap().iter_mut() {
-                if feature.0 == remove_feature.feature {
-                    let needs = feature.1.as_array_mut().unwrap();
-                    needs.retain(|need| need.as_str().unwrap() != remove_feature.value);
-                }
-            }
+            edit::remove_feature(&mut manifest, remove_feature)?;
         }
 
         manifest.write()?;

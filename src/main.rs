@@ -7,6 +7,7 @@ mod check;
 mod claim;
 mod cli;
 mod config;
+mod edit;
 mod plan;
 mod registry;
 mod shared;

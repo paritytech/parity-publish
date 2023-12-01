@@ -96,6 +96,7 @@ pub struct Plan {
     /// Create a new plan even if one exists.
     #[arg(long)]
     pub new: bool,
+    /// Don't run check during plan
     #[arg(long)]
     pub skip_check: bool,
     #[arg(default_value = ".")]

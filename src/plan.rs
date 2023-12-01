@@ -5,7 +5,7 @@ use std::{
 };
 
 use anyhow::{bail, Context, Result};
-use cargo::core::{dependency::DepKind, FeatureValue, Package, Summary, Workspace};
+use cargo::core::{dependency::DepKind, Package, Summary, Workspace};
 use semver::{BuildMetadata, Prerelease, Version};
 use termcolor::{ColorChoice, StandardStream};
 
@@ -82,17 +82,13 @@ pub struct Publish {
     pub verify: bool,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Default)]
+#[derive(serde::Serialize, serde::Deserialize, Default, Clone)]
 pub struct RewriteDep {
     pub name: String,
     #[serde(skip_serializing_if = "is_default")]
     #[serde(default)]
     pub version: Option<String>,
-    #[serde(skip_serializing_if = "is_default")]
-    #[serde(default)]
-    pub exact: bool,
     pub path: Option<PathBuf>,
-    //pub dev: bool,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Default, PartialOrd, Ord, PartialEq, Eq)]
@@ -101,7 +97,7 @@ pub struct RemoveDep {
     pub package: Option<String>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Default)]
+#[derive(serde::Serialize, serde::Deserialize, Default, Clone)]
 pub struct RemoveFeature {
     pub feature: String,
     #[serde(skip_serializing_if = "is_default")]
@@ -254,11 +250,12 @@ async fn calculate_plan(
 
     for c in order {
         let upstreamc = upstream.get(c);
+        let old_crate = old_plan.crates.iter().find(|old| old.name == c);
         let c = *workspace_crates.get(c).unwrap();
 
         let mut publish_reason = is_publish(plan, c, changed)?;
 
-        let (from, to) = get_versions(plan, upstreamc, c, publish_reason.is_some(), &old_plan)?;
+        let (from, to) = get_versions(plan, upstreamc, c, publish_reason.is_some(), old_crate)?;
 
         // if the version is already taken assume it's from a previous pre release and use this
         // version instead of making a new release
@@ -270,8 +267,12 @@ async fn calculate_plan(
 
         new_versions.insert(c.name().to_string(), to.to_string());
 
-        let rewrite_deps = rewrite_deps(plan, c, &workspace_crates, upstream).await?;
-        let remove_features = remove_dev_features(c);
+        let mut rewrite_deps = old_crate.map(|c| c.rewrite_dep.clone()).unwrap_or_default();
+        for dep in rewrite_git_deps(c, &workspace_crates, upstream).await? {
+            if !rewrite_deps.iter().any(|d| d.name == dep.name) {
+                rewrite_deps.push(dep);
+            }
+        }
         let remove_deps =
             remove_git_deps(c, &workspace_crates, upstream, &mut planner.remove_crates);
 
@@ -288,7 +289,9 @@ async fn calculate_plan(
                 .strip_prefix(workspace.root())
                 .unwrap()
                 .to_path_buf(),
-            remove_feature: remove_features,
+            remove_feature: old_crate
+                .map(|c| c.remove_feature.clone())
+                .unwrap_or_default(),
             remove_dep: remove_deps,
             verify: !plan.no_verify,
         });
@@ -301,18 +304,14 @@ fn get_versions(
     upstreamc: Option<&Vec<Summary>>,
     c: &Package,
     publish: bool,
-    old_plan: &Planner,
+    old_crate: Option<&Publish>,
 ) -> Result<(Version, Version)> {
     let from = upstreamc
         .and_then(|u| max_ver(u, plan.pre.is_some()))
         .map(|u| u.version().clone())
         .unwrap_or(Version::parse("0.1.0").unwrap());
 
-    if let Some(oldc) = old_plan
-        .crates
-        .iter()
-        .find(|cr| cr.name == c.name().as_str())
-    {
+    if let Some(oldc) = old_crate {
         return Ok((Version::parse(&oldc.from)?, Version::parse(&oldc.to)?));
     }
 
@@ -429,8 +428,7 @@ fn remove_git_deps(
     remove_deps
 }
 
-async fn rewrite_deps(
-    plan: &Plan,
+async fn rewrite_git_deps(
     cra: &Package,
     workspace_crates: &BTreeMap<&str, &Package>,
     upstream: &BTreeMap<String, Vec<Summary>>,
@@ -438,82 +436,26 @@ async fn rewrite_deps(
     let mut rewrite = Vec::new();
 
     for dep in cra.dependencies() {
-        if dep.source_id().is_git() || dep.source_id().is_path() {
-            if let Some(dep_crate) = workspace_crates.get(dep.package_name().as_str()) {
-                let path = plan.path.canonicalize()?;
-
-                //let package_name = (dep.name_in_toml() != dep.package_name())
-                //    .then(|| dep.package_name().to_string());
-
-                let version = if dep.source_id().is_git() {
-                    let version = upstream
-                        .get(dep.package_name().as_str())
-                        .and_then(|c| max_ver(c, false))
-                        .with_context(|| {
-                            format!("crate {} has no crates.io release", dep.package_name())
-                        })?
-                        .version();
-                    Some(version.to_string())
-                } else {
-                    None
-                };
+        if dep.source_id().is_git() {
+            if !workspace_crates.contains_key(dep.package_name().as_str()) {
+                let version = upstream
+                    .get(dep.package_name().as_str())
+                    .and_then(|c| max_ver(c, false))
+                    .with_context(|| {
+                        format!("crate {} has no crates.io release", dep.package_name())
+                    })?
+                    .version();
 
                 rewrite.push(RewriteDep {
                     name: dep.name_in_toml().to_string(),
-                    version,
-                    exact: plan.exact,
-                    path: Some(
-                        dep_crate
-                            .manifest_path()
-                            .parent()
-                            .unwrap()
-                            .strip_prefix(path)
-                            .unwrap()
-                            .to_path_buf(),
-                    ),
+                    version: Some(version.to_string()),
+                    path: None,
                 })
             }
         }
     }
 
     Ok(rewrite)
-}
-
-fn remove_dev_features(member: &Package) -> Vec<RemoveFeature> {
-    let mut remove = Vec::new();
-    let mut dev = BTreeSet::new();
-    let mut non_dev = BTreeSet::new();
-
-    for dep in member.dependencies() {
-        if dep.kind() == DepKind::Development {
-            dev.insert(dep.name_in_toml());
-        } else {
-            non_dev.insert(dep.name_in_toml());
-        }
-    }
-
-    for feature in non_dev {
-        dev.remove(&feature);
-    }
-
-    for (feature, needs) in member.summary().features() {
-        for need in needs {
-            let dep_name = match need {
-                FeatureValue::Feature(_) => continue,
-                FeatureValue::Dep { dep_name } => dep_name.as_str(),
-                FeatureValue::DepFeature { dep_name, .. } => dep_name.as_str(),
-            };
-
-            if dev.contains(dep_name) {
-                remove.push(RemoveFeature {
-                    feature: feature.to_string(),
-                    value: Some(need.to_string()),
-                });
-            }
-        }
-    }
-
-    remove
 }
 
 fn order<'a>(stdout: &mut StandardStream, workspace: &'a Workspace) -> Result<Vec<&'a str>> {

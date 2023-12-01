@@ -90,9 +90,6 @@ pub struct Plan {
     /// don't verify before publishing
     #[arg(long)]
     pub no_verify: bool,
-    /// Use exact version for deps instead of semver
-    #[arg(long, short)]
-    pub exact: bool,
     /// Create a new plan even if one exists
     #[arg(long)]
     pub new: bool,

@@ -6,6 +6,7 @@ use cargo::core::{FeatureValue, Workspace};
 use cargo::util::toml_mut::dependency::RegistrySource;
 use cargo::util::toml_mut::manifest::LocalManifest;
 use cargo::{core::dependency::DepKind, util::toml_mut::dependency::PathSource};
+use semver::Version;
 use toml_edit::Document;
 
 use crate::plan::{Planner, RemoveCrate, RemoveDep, RemoveFeature, RewriteDep};
@@ -38,7 +39,7 @@ pub fn rewrite_deps(
                 .clone()
         };
 
-        if dep.exact {
+        if !Version::parse(&new_ver).unwrap().pre.is_empty() {
             new_ver = format!("={}", new_ver);
         }
 

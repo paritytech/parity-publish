@@ -99,25 +99,29 @@ pub fn remove_dep(manifest: &mut LocalManifest, dep: &RemoveDep) -> Result<()> {
         }
     }
 
+    for dep in removed {
+        remove_features_of_dep(manifest, &dep)?;
+    }
+
+    Ok(())
+}
+
+pub fn remove_features_of_dep(manifest: &mut LocalManifest, toml_key: &str) -> Result<()> {
     let features = manifest.manifest.get_table_mut(&["features".to_string()]);
     if let Ok(features) = features {
         let features = features.as_table_mut().context("not a table")?;
-        removed.dedup();
 
-        for dep in removed {
-            for (_, value) in features.iter_mut() {
-                let value = value.as_array_mut().context("not an array")?;
-                value.retain(|v| {
-                    let v = v.as_str().unwrap();
-                    let feature = FeatureValue::new(v.into());
-                    match feature {
-                        FeatureValue::Feature(_) => true,
-                        FeatureValue::Dep { dep_name } => dep_name.as_str() != dep,
-                        FeatureValue::DepFeature { dep_name, .. } => dep_name.as_str() != dep,
-                    }
-                });
-                //
-            }
+        for (_, value) in features.iter_mut() {
+            let value = value.as_array_mut().context("not an array")?;
+            value.retain(|v| {
+                let v = v.as_str().unwrap();
+                let feature = FeatureValue::new(v.into());
+                match feature {
+                    FeatureValue::Feature(_) => true,
+                    FeatureValue::Dep { dep_name } => dep_name.as_str() != toml_key,
+                    FeatureValue::DepFeature { dep_name, .. } => dep_name.as_str() != toml_key,
+                }
+            });
         }
     }
 

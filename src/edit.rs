@@ -111,32 +111,122 @@ pub fn remove_dep(
         }
     }
 
+    manifest.write()?;
+
     for dep in removed {
-        remove_features_of_dep(manifest, &dep)?;
+        remove_features_of_dep(workspace, manifest, &dep)?;
     }
 
     Ok(())
 }
 
-pub fn remove_features_of_dep(manifest: &mut LocalManifest, toml_key: &str) -> Result<()> {
+pub fn remove_features_of_dep(
+    workspace: &Workspace,
+    manifest: &mut LocalManifest,
+    toml_key: &str,
+) -> Result<()> {
+    let mut remove = Vec::new();
+    let package_name = manifest.package_name()?.to_string();
     let features = manifest.manifest.get_table_mut(&["features".to_string()]);
     if let Ok(features) = features {
         let features = features.as_table_mut().context("not a table")?;
 
-        for (_, value) in features.iter_mut() {
+        for (key, value) in features.iter_mut() {
             let value = value.as_array_mut().context("not an array")?;
-            value.retain(|v| {
+
+            // We don't really know if we should remove the whole feature line or just the
+            // part of the feature that references the dep we deleted.
+            //
+            // If the feature enables code that references the dep then not removing the whole
+            // feature would mean if that dep is enabled the code would not compile.
+            //
+            // So only remove the whole feature if the feature unconditionally enabled the dep
+            // otherwise just remove the one part.
+            let dep_value = value.iter().any(|v| {
                 let v = v.as_str().unwrap();
                 let feature = FeatureValue::new(v.into());
-                match feature {
-                    FeatureValue::Feature(_) => true,
-                    FeatureValue::Dep { dep_name } => dep_name.as_str() != toml_key,
-                    FeatureValue::DepFeature { dep_name, .. } => dep_name.as_str() != toml_key,
-                }
+                matches!(feature, FeatureValue::Dep { dep_name } if dep_name.as_str() == toml_key)
             });
+            if dep_value {
+                remove.push(key.get().to_string());
+            } else {
+                value.retain(|v| {
+                    let v = v.as_str().unwrap();
+                    let feature = FeatureValue::new(v.into());
+                    match feature {
+                        FeatureValue::Feature(dep_name) => {
+                            if dep_name.as_str() == toml_key {
+                                remove.push(key.get().to_string());
+                            }
+                            true
+                        }
+                        FeatureValue::Dep { dep_name } => {
+                            if dep_name.as_str() == toml_key {
+                                remove.push(key.get().to_string());
+                            }
+                            true
+                        }
+                        FeatureValue::DepFeature { dep_name, weak, .. } => {
+                            if dep_name.as_str() == toml_key {
+                                if !weak {
+                                    remove.push(key.get().to_string());
+                                }
+                                false
+                            } else {
+                                true
+                            }
+                        }
+                    }
+                });
+            }
         }
     }
 
+    remove.dedup();
+
+    let features = manifest.manifest.get_table_mut(&["features".to_string()]);
+    if let Ok(features) = features {
+        let features = features.as_table_mut().context("not a table")?;
+        for key in remove {
+            remove_dep_feature_all(workspace, &package_name, &key)?;
+            features.remove(&key);
+        }
+    }
+
+    manifest.write()?;
+
+    Ok(())
+}
+
+pub fn remove_dep_feature_all(workspace: &Workspace, name: &str, value: &str) -> Result<()> {
+    for c in workspace.members() {
+        let mut remove = Vec::new();
+        let mut manifest = LocalManifest::try_new(c.manifest_path())?;
+        let features = manifest.manifest.get_table_mut(&["features".to_string()])?;
+        let features = features.as_table_mut().context("not a table")?;
+
+        for (key, feature) in features.iter() {
+            let feature = feature.as_array().context("not an array")?;
+            for feature in feature {
+                let feature = feature.as_str().context("not a string")?;
+                let feature = FeatureValue::new(feature.into());
+                if matches!(feature, FeatureValue::DepFeature { dep_name, dep_feature, .. } if dep_name.as_str() == name && dep_feature.as_str() == value)
+                {
+                    remove.push(key.to_string());
+                }
+            }
+        }
+
+        for key in &remove {
+            features.remove(key);
+        }
+
+        manifest.write()?;
+
+        for key in remove {
+            remove_dep_feature_all(workspace, c.name().as_str(), &key)?;
+        }
+    }
     Ok(())
 }
 
@@ -197,6 +287,28 @@ pub fn remove_crate(
                 let members = members.as_array_mut().context("not an array")?;
                 members.retain(|m| Path::new(m.as_str().unwrap()) != path)
             }
+        }
+    }
+
+    remove_dep_all(&workspace, &remove_c.name)?;
+    Ok(())
+}
+
+pub fn remove_dep_all(workspace: &Workspace, remove_c: &str) -> Result<()> {
+    for c in workspace.members() {
+        if c.dependencies()
+            .iter()
+            .any(|d| d.package_name() == remove_c)
+        {
+            let mut manifest = LocalManifest::try_new(c.manifest_path())?;
+            remove_dep(
+                workspace,
+                &mut manifest,
+                &RemoveDep {
+                    name: remove_c.to_string(),
+                    package: None,
+                },
+            )?;
         }
     }
     Ok(())

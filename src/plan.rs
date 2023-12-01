@@ -375,7 +375,7 @@ fn remove_dev_features(member: &Package) -> Vec<RemoveFeature> {
             if dev.contains(dep_name) {
                 remove.push(RemoveFeature {
                     feature: feature.to_string(),
-                    value: need.to_string(),
+                    value: Some(need.to_string()),
                 });
             }
         }

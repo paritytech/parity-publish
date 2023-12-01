@@ -12,7 +12,6 @@ use termcolor::{ColorChoice, StandardStream};
 use crate::{
     changed, check,
     cli::{Check, Plan},
-    edit::RemoveCrate,
     registry,
     shared::*,
 };
@@ -106,6 +105,11 @@ pub struct RemoveFeature {
     #[serde(skip_serializing_if = "is_default")]
     #[serde(default)]
     pub value: Option<String>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Default, Eq, PartialEq)]
+pub struct RemoveCrate {
+    pub name: String,
 }
 
 pub async fn handle_plan(plan: Plan) -> Result<()> {

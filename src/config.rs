@@ -5,8 +5,8 @@ use cargo::{core::Workspace, util::toml_mut::manifest::LocalManifest};
 
 use crate::{
     cli,
-    edit::{self, RemoveCrate},
-    plan::{RemoveDep, RemoveFeature},
+    edit::{self},
+    plan::{RemoveCrate, RemoveDep, RemoveFeature},
 };
 
 #[derive(serde::Serialize, serde::Deserialize, Default)]

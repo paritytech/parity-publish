@@ -8,12 +8,7 @@ use cargo::util::toml_mut::manifest::LocalManifest;
 use cargo::{core::dependency::DepKind, util::toml_mut::dependency::PathSource};
 use toml_edit::Document;
 
-use crate::plan::{Planner, RemoveDep, RemoveFeature, RewriteDep};
-
-#[derive(serde::Serialize, serde::Deserialize, Default, Eq, PartialEq)]
-pub struct RemoveCrate {
-    pub name: String,
-}
+use crate::plan::{Planner, RemoveCrate, RemoveDep, RemoveFeature, RewriteDep};
 
 pub fn rewrite_deps(
     workspace_path: &Path,

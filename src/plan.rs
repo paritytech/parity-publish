@@ -170,7 +170,7 @@ pub async fn generate_plan(plan: &Plan) -> Result<()> {
     }
 
     let changed = if let Some(from) = &plan.since {
-        let changed = changed::get_changed_crates(&workspace, from, "HEAD")?;
+        let changed = changed::get_changed_crates(&workspace, true, from, "HEAD")?;
         let indirect = changed
             .iter()
             .filter(|c| matches!(c.kind, changed::ChangeKind::Dependency))

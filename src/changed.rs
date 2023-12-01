@@ -43,7 +43,7 @@ pub async fn handle_changed(diff: Changed) -> Result<()> {
     let path = diff.path.canonicalize()?.join("Cargo.toml");
     let workspace = Workspace::new(&path, &config)?;
 
-    let crates = get_changed_crates(&workspace, &diff.from, &diff.to)?;
+    let crates = get_changed_crates(&workspace, !diff.no_deps, &diff.from, &diff.to)?;
 
     for c in crates {
         if diff.paths >= 2 {
@@ -122,7 +122,7 @@ fn find_indirect_changes(w: &Workspace, changed: &mut Vec<Change>) {
     }
 }
 
-pub fn get_changed_crates(w: &Workspace, from: &str, to: &str) -> Result<Vec<Change>> {
+pub fn get_changed_crates(w: &Workspace, deps: bool, from: &str, to: &str) -> Result<Vec<Change>> {
     let changed_files = get_changed_files(w, from, to)?;
     let mut changed = Vec::new();
     let config = w.config();
@@ -158,7 +158,9 @@ pub fn get_changed_crates(w: &Workspace, from: &str, to: &str) -> Result<Vec<Cha
         }
     }
 
-    find_indirect_changes(w, &mut changed);
+    if deps {
+        find_indirect_changes(w, &mut changed);
+    }
 
     changed.retain(|ch| {
         w.members()

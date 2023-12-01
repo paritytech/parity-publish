@@ -59,7 +59,7 @@ pub struct Claim {
 
 #[derive(Parser, Debug)]
 pub struct Changed {
-    /// just print paths, pass twice to print manifests
+    /// Just print paths, pass twice to print manifests
     #[arg(long, short, action = ArgAction::Count)]
     pub paths: u8,
     /// Only print crate names
@@ -67,6 +67,9 @@ pub struct Changed {
     pub quiet: bool,
     #[arg(long, short)]
     pub verbose: bool,
+    /// Don't include packages that have has a dependency change
+    #[arg(long, short = 'd')]
+    pub no_deps: bool,
     /// Path to the cargo workspace
     pub path: PathBuf,
     /// The git commit to look for changes from

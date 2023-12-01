@@ -71,7 +71,6 @@ pub async fn handle_claim(claim: Claim) -> Result<()> {
                 let opts = PublishOpts {
                     config: workspace.config(),
                     token: Some(token.clone().into()),
-                    index: None,
                     verify: false,
                     allow_dirty: true,
                     jobs: None,
@@ -79,12 +78,12 @@ pub async fn handle_claim(claim: Claim) -> Result<()> {
                     to_publish: Packages::Default,
                     targets: Vec::new(),
                     dry_run: claim.dry_run,
-                    registry: None,
                     cli_features: CliFeatures {
                         features: Default::default(),
                         all_features: false,
                         uses_default_features: true,
                     },
+                    reg_or_index: None,
                 };
                 let workspace = Workspace::new(&manifest, &config)?;
 

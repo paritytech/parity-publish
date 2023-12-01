@@ -1,8 +1,9 @@
 use std::task::Poll;
 
 use anyhow::{anyhow, Result};
+use cargo::sources::source::{QueryKind, Source};
 use cargo::{
-    core::{Dependency, QueryKind, Source, SourceId, Summary, Workspace},
+    core::{Dependency, SourceId, Summary, Workspace},
     sources::RegistrySource,
     util::interning::InternedString,
 };

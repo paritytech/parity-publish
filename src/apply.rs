@@ -140,7 +140,6 @@ fn publish(
         let opts = PublishOpts {
             config,
             token: Some(token.clone().into()),
-            index: None,
             verify: pkg.verify && !apply.dry_run && !apply.no_verify,
             allow_dirty: apply.allow_dirty,
             jobs: None,
@@ -148,8 +147,8 @@ fn publish(
             to_publish: Packages::Packages(vec![pkg.name.clone()]),
             targets: Vec::new(),
             dry_run: apply.dry_run,
-            registry: None,
             cli_features: CliFeatures::new_all(false),
+            reg_or_index: None,
         };
         cargo::ops::publish(&workspace, &opts)?;
 

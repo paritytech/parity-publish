@@ -135,10 +135,9 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
         );
         for dep in c.dependencies() {
             if dep.source_id().is_git() || dep.source_id().is_path() {
-                upstream.insert(
-                    dep.package_name().to_string(),
-                    registry::get_crate(&mut reg, c.name()).unwrap(),
-                );
+                if let Ok(package) = registry::get_crate(&mut reg, dep.package_name()) {
+                    upstream.insert(dep.package_name().to_string(), package);
+                }
             }
         }
     }

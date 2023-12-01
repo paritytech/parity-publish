@@ -1,3 +1,4 @@
+use std::fs::read_to_string;
 use std::path::Path;
 
 use anyhow::{bail, Context, Result};
@@ -86,6 +87,20 @@ pub fn remove_dep(
     manifest: &mut LocalManifest,
     dep: &RemoveDep,
 ) -> Result<()> {
+    let root_manifest = read_to_string(workspace.root_manifest())?;
+    let mut root_manifest: Document = root_manifest.parse()?;
+    remove_dep_inner(workspace, &mut root_manifest, manifest, dep)?;
+    let root_manifest = root_manifest.to_string();
+    std::fs::write(workspace.root_manifest(), &root_manifest)?;
+    Ok(())
+}
+
+pub fn remove_dep_inner(
+    workspace: &Workspace,
+    root_manifest: &mut Document,
+    manifest: &mut LocalManifest,
+    dep: &RemoveDep,
+) -> Result<()> {
     let mut removed = Vec::new();
 
     let exiting_deps = manifest
@@ -114,7 +129,7 @@ pub fn remove_dep(
     manifest.write()?;
 
     for dep in removed {
-        remove_features_of_dep(workspace, manifest, &dep)?;
+        remove_features_of_dep(workspace, root_manifest, manifest, &dep)?;
     }
 
     Ok(())
@@ -122,6 +137,7 @@ pub fn remove_dep(
 
 pub fn remove_features_of_dep(
     workspace: &Workspace,
+    root_manifest: &mut Document,
     manifest: &mut LocalManifest,
     toml_key: &str,
 ) -> Result<()> {
@@ -188,7 +204,7 @@ pub fn remove_features_of_dep(
     if let Ok(features) = features {
         let features = features.as_table_mut().context("not a table")?;
         for key in remove {
-            remove_dep_feature_all(workspace, &package_name, &key)?;
+            remove_dep_feature_all(workspace, root_manifest, &package_name, &key)?;
             features.remove(&key);
         }
     }
@@ -198,10 +214,35 @@ pub fn remove_features_of_dep(
     Ok(())
 }
 
-pub fn remove_dep_feature_all(workspace: &Workspace, name: &str, value: &str) -> Result<()> {
+pub fn remove_dep_feature_all(
+    workspace: &Workspace,
+    root_manifest: &mut Document,
+    name: &str,
+    value: &str,
+) -> Result<()> {
     for c in workspace.members() {
         let mut remove = Vec::new();
         let mut manifest = LocalManifest::try_new(c.manifest_path())?;
+
+        for (table, dep) in manifest.get_dependency_versions(name) {
+            if table.kind() == DepKind::Development {
+                continue;
+            }
+
+            let dep = dep?;
+            if let Some(features) = &dep.features {
+                if features.contains(value) {
+                    remove_crate_inner(
+                        workspace,
+                        root_manifest,
+                        &RemoveCrate {
+                            name: c.name().to_string(),
+                        },
+                    )?;
+                }
+            }
+        }
+
         let features = manifest.manifest.get_table_mut(&["features".to_string()])?;
         let features = features.as_table_mut().context("not a table")?;
 
@@ -224,7 +265,7 @@ pub fn remove_dep_feature_all(workspace: &Workspace, name: &str, value: &str) ->
         manifest.write()?;
 
         for key in remove {
-            remove_dep_feature_all(workspace, c.name().as_str(), &key)?;
+            remove_dep_feature_all(workspace, root_manifest, c.name().as_str(), &key)?;
         }
     }
     Ok(())
@@ -269,7 +310,16 @@ pub fn set_version(manifest: &mut LocalManifest, new_ver: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn remove_crate(
+pub fn remove_crate(workspace: &Workspace, remove_c: &RemoveCrate) -> Result<()> {
+    let root_manifest = read_to_string(workspace.root_manifest())?;
+    let mut root_manifest: Document = root_manifest.parse()?;
+    remove_crate_inner(workspace, &mut root_manifest, remove_c)?;
+    let root_manifest = root_manifest.to_string();
+    std::fs::write(workspace.root_manifest(), &root_manifest)?;
+    Ok(())
+}
+
+pub fn remove_crate_inner(
     workspace: &Workspace,
     manifest: &mut Document,
     remove_c: &RemoveCrate,
@@ -290,19 +340,24 @@ pub fn remove_crate(
         }
     }
 
-    remove_dep_all(&workspace, &remove_c.name)?;
+    remove_dep_all(&workspace, manifest, &remove_c.name)?;
     Ok(())
 }
 
-pub fn remove_dep_all(workspace: &Workspace, remove_c: &str) -> Result<()> {
+pub fn remove_dep_all(
+    workspace: &Workspace,
+    root_manifest: &mut Document,
+    remove_c: &str,
+) -> Result<()> {
     for c in workspace.members() {
         if c.dependencies()
             .iter()
             .any(|d| d.package_name() == remove_c)
         {
             let mut manifest = LocalManifest::try_new(c.manifest_path())?;
-            remove_dep(
+            remove_dep_inner(
                 workspace,
+                root_manifest,
                 &mut manifest,
                 &RemoveDep {
                     name: remove_c.to_string(),

@@ -22,6 +22,7 @@ pub fn get_crate(reg: &mut RegistrySource, name: InternedString) -> Result<Vec<S
         &Dependency::parse(name, None, reg.source_id())?,
         QueryKind::Fuzzy,
     )? {
+        Poll::Ready(c) if c.is_empty() => Err(anyhow!("not found")),
         Poll::Ready(c) => Ok(c),
         Poll::Pending => Err(anyhow!("pending")),
     }

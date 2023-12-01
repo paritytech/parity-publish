@@ -2,7 +2,6 @@ use std::{fs::read_to_string, path::Path};
 
 use anyhow::{Context, Result};
 use cargo::{core::Workspace, util::toml_mut::manifest::LocalManifest};
-use toml_edit::Document;
 
 use crate::{
     cli,
@@ -52,13 +51,9 @@ pub fn handle_config(cli: cli::Config) -> Result<()> {
 }
 
 pub fn apply_config(workspace: &Workspace, config: &Config) -> Result<()> {
-    let root_manifest = read_to_string(workspace.root_manifest())?;
-    let mut root_manifest: Document = root_manifest.parse()?;
     for pkg in &config.remove_crates {
-        edit::remove_crate(&workspace, &mut root_manifest, pkg)?;
+        edit::remove_crate(&workspace, pkg)?;
     }
-    let root_manifest = root_manifest.to_string();
-    std::fs::write(workspace.root_manifest(), &root_manifest)?;
 
     for pkg in &config.crates {
         let c = workspace

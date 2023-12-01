@@ -93,12 +93,15 @@ pub struct Plan {
     /// Use exact version for deps instead of semver
     #[arg(long, short)]
     pub exact: bool,
-    /// Create a new plan even if one exists.
+    /// Create a new plan even if one exists
     #[arg(long)]
     pub new: bool,
     /// Don't run check during plan
     #[arg(long)]
     pub skip_check: bool,
+    /// Patch bump the specified crates
+    #[arg(long)]
+    pub patch: bool,
     #[arg(default_value = ".")]
     /// Path to the cargo workspace
     pub path: PathBuf,

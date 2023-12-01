@@ -4,7 +4,7 @@ use std::{
     path::PathBuf,
 };
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use cargo::core::{dependency::DepKind, FeatureValue, Package, Summary, Workspace};
 use semver::{BuildMetadata, Prerelease, Version};
 use termcolor::{ColorChoice, StandardStream};
@@ -31,6 +31,8 @@ pub enum BumpKind {
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub enum PublishReason {
+    #[serde(rename = "bumped by --patch")]
+    Bumped,
     #[serde(rename = "manually specified")]
     Specified,
     #[serde(rename = "changed")]
@@ -113,6 +115,43 @@ pub struct RemoveCrate {
 }
 
 pub async fn handle_plan(plan: Plan) -> Result<()> {
+    if plan.patch {
+        patch_bump(&plan)
+    } else {
+        generate_plan(&plan).await
+    }
+}
+
+pub fn patch_bump(plan: &Plan) -> Result<()> {
+    let mut planner = read_plan(plan)
+        .context("Can't read Plan.toml")?
+        .context("Plan.toml does not exist")?;
+
+    for package in &plan.crates {
+        let c = planner
+            .crates
+            .iter_mut()
+            .find(|c| c.name == *package)
+            .with_context(|| format!("could not find crate '{}' in Plan.toml", package))?;
+
+        if !c.publish {
+            bail!("crate '{}' is set not to publish", package);
+        }
+
+        c.from = c.to.clone();
+        let mut to = Version::parse(&c.from)?;
+        to.patch += 1;
+        c.to = to.to_string();
+        c.bump = BumpKind::Minor;
+        c.reason = Some(PublishReason::Bumped);
+    }
+
+    write_plan(plan, &planner)?;
+
+    Ok(())
+}
+
+pub async fn generate_plan(plan: &Plan) -> Result<()> {
     let mut stdout = StandardStream::stdout(ColorChoice::Auto);
 
     let config = cargo::Config::default()?;
@@ -190,8 +229,7 @@ pub async fn handle_plan(plan: Plan) -> Result<()> {
     )
     .await?;
 
-    let output = toml::to_string_pretty(&planner)?;
-    std::fs::write(plan.path.join("Plan.toml"), output)?;
+    write_plan(plan, &planner)?;
     writeln!(
         stdout,
         "plan generated {} packages {} to publish",
@@ -210,7 +248,7 @@ async fn calculate_plan(
     workspace_crates: BTreeMap<&str, &Package>,
     changed: &BTreeSet<String>,
 ) -> Result<Planner> {
-    let old_plan = old_plan(plan);
+    let old_plan = read_plan(plan)?.unwrap_or_default();
     let mut planner = Planner::default();
     let mut new_versions = BTreeMap::new();
 
@@ -521,15 +559,26 @@ fn order<'a>(stdout: &mut StandardStream, workspace: &'a Workspace) -> Result<Ve
     Ok(order)
 }
 
-fn old_plan(plan: &Plan) -> Planner {
+fn read_plan(plan: &Plan) -> Result<Option<Planner>> {
+    let path = plan.path.join("Plan.toml");
+
     if plan.new {
-        Default::default()
-    } else {
-        std::fs::read_to_string(plan.path.join("Plan.toml"))
-            .ok()
-            .and_then(|plan| toml::from_str(&plan).ok())
-            .unwrap_or_default()
+        return Ok(None);
     }
+
+    if path.exists() {
+        let plan = std::fs::read_to_string(&path)?;
+        let plan = toml::from_str(&plan)?;
+        Ok(Some(plan))
+    } else {
+        Ok(None)
+    }
+}
+
+fn write_plan(plan: &Plan, planner: &Planner) -> Result<()> {
+    let output = toml::to_string_pretty(&planner)?;
+    std::fs::write(plan.path.join("Plan.toml"), output)?;
+    Ok(())
 }
 
 fn max_ver(crates: &[Summary], pre: bool) -> Option<&Summary> {

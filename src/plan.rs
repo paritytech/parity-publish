@@ -17,6 +17,16 @@ use crate::{
     shared::*,
 };
 
+#[derive(serde::Serialize, serde::Deserialize)]
+pub enum PublishReason {
+    #[serde(rename = "manually specified")]
+    Specified,
+    #[serde(rename = "changed")]
+    Changed,
+    #[serde(rename = "--all was specified")]
+    All,
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Default)]
 pub struct Planner {
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -39,7 +49,9 @@ pub struct Publish {
     pub from: String,
     pub to: String,
     pub bump: String,
-    pub reason: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    pub reason: Option<PublishReason>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(default)]
     pub rewrite_dep: Vec<RewriteDep>,
@@ -188,15 +200,15 @@ async fn calculate_plan(
         let c = *workspace_crates.get(c).unwrap();
         let mut rewrite = Vec::new();
 
-        let mut publish = is_publish(plan, c, changed)?;
+        let mut publish_reason = is_publish(plan, c, changed)?;
 
-        let (from, to) = get_versions(plan, upstreamc, c, publish, &old_plan)?;
+        let (from, to) = get_versions(plan, upstreamc, c, publish_reason.is_some(), &old_plan)?;
 
         // if the version is already taken assume it's from a previous pre release and use this
         // version instead of making a new release
         if let Some(upstreamc) = upstreamc {
             if upstreamc.iter().any(|u| u.version() == &to) && !to.pre.is_empty() {
-                publish = false;
+                publish_reason = None;
             }
         }
 
@@ -210,12 +222,12 @@ async fn calculate_plan(
             remove_git_deps(c, &workspace_crates, upstream, &mut planner.remove_crates);
 
         planner.crates.push(Publish {
-            publish,
+            publish: publish_reason.is_some(),
             name: c.name().to_string(),
             from: from.to_string(),
             to: to.to_string(),
             bump: "unknown".to_string(),
-            reason: "changed".to_string(),
+            reason: publish_reason,
             rewrite_dep: rewrite,
             path: c
                 .root()
@@ -295,24 +307,28 @@ fn get_versions(
     Ok((from, to))
 }
 
-fn is_publish(plan: &Plan, c: &Package, changed: &BTreeSet<String>) -> Result<bool> {
+fn is_publish(
+    plan: &Plan,
+    c: &Package,
+    changed: &BTreeSet<String>,
+) -> Result<Option<PublishReason>> {
     if c.publish().is_some() {
-        return Ok(false);
+        return Ok(None);
     }
 
     if plan.all {
-        return Ok(true);
+        return Ok(Some(PublishReason::All));
     }
 
     if plan.crates.iter().any(|p| p == c.name().as_str()) {
-        return Ok(true);
+        return Ok(Some(PublishReason::Specified));
     }
 
     if changed.contains(c.name().as_str()) {
-        return Ok(true);
+        return Ok(Some(PublishReason::Changed));
     }
 
-    Ok(false)
+    Ok(None)
 }
 
 fn remove_git_deps(

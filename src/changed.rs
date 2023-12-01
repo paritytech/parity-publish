@@ -182,12 +182,20 @@ fn manifest_changed(root: &Path, path: &str, from: &str, to: &str) -> Result<boo
     struct Sorter;
 
     impl VisitMut for Sorter {
+        fn visit_document_mut(&mut self, node: &mut toml_edit::Document) {
+            node.set_trailing("");
+        }
+
+        fn visit_value_mut(&mut self, node: &mut toml_edit::Value) {
+            node.decor_mut().clear();
+        }
+
         fn visit_table_like_mut(&mut self, node: &mut dyn toml_edit::TableLike) {
-            node.sort_values()
+            node.sort_values();
         }
 
         fn visit_array_mut(&mut self, node: &mut toml_edit::Array) {
-            node.sort_by_key(|k| k.as_str().unwrap().to_string())
+            node.sort_by_key(|k| k.as_str().unwrap().to_string());
         }
     }
 

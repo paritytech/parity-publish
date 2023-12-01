@@ -82,18 +82,17 @@ pub fn rewrite_deps(
 }
 
 pub fn remove_dep(manifest: &mut LocalManifest, dep: &RemoveDep) -> Result<()> {
-    let exisiting_deps = manifest
+    let exiting_deps = manifest
         .get_dependency_versions(&dep.name)
         .collect::<Vec<_>>();
-
-    for (kind, mut table) in manifest.get_sections() {
-        let table = table.as_table_like_mut().context("not a table")?;
-
-        if let Some(existing_dep) = exisiting_deps.iter().find(|(t, _)| t.kind() == kind.kind()) {
-            if let Ok(dep) = &existing_dep.1 {
-                let toml_name = &dep.name;
-                table.remove(toml_name);
-            }
+    for (table, dep) in exiting_deps {
+        let table = table
+            .to_table()
+            .iter()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>();
+        if let Ok(dep) = dep {
+            manifest.remove_from_table(&table, dep.toml_key())?;
         }
     }
 

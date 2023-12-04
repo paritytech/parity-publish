@@ -238,7 +238,7 @@ fn get_file(root: &Path, path: &str, r: &str) -> Result<String> {
         .output()?;
 
     if !res.status.success() {
-        bail!("git exited non 0");
+        bail!("git exited non 0-");
     }
 
     Ok(String::from_utf8(res.stdout)?)
@@ -257,7 +257,7 @@ fn get_changed_files(w: &Workspace, from: &str, to: &str) -> Result<HashSet<Stri
         .output()?;
 
     if !res.status.success() {
-        bail!("git exited non 0");
+        bail!("{}", String::from_utf8_lossy(&res.stderr));
     }
 
     let files = std::str::from_utf8(&res.stdout)?

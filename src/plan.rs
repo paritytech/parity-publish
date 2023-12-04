@@ -436,7 +436,7 @@ async fn rewrite_git_deps(
     let mut rewrite = Vec::new();
 
     for dep in cra.dependencies() {
-        if dep.source_id().is_git() {
+        if dep.source_id().is_git() && !dep.is_optional() {
             if !workspace_crates.contains_key(dep.package_name().as_str()) {
                 let version = upstream
                     .get(dep.package_name().as_str())

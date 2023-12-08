@@ -62,7 +62,7 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
 
     for pkg in &plan.crates {
         let c = *workspace_crates.get(pkg.name.as_str()).unwrap();
-        let mut manifest = LocalManifest::try_new(&path.join(&pkg.path).join("Cargo.toml"))?;
+        let mut manifest = LocalManifest::try_new(c.manifest_path())?;
         edit::set_version(&mut manifest, &pkg.to)?;
         edit::fix_description(&mut manifest, &pkg.name)?;
 

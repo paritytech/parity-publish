@@ -59,7 +59,6 @@ pub struct Publish {
     #[serde(skip_serializing_if = "is_not_default")]
     pub publish: bool,
     pub name: String,
-    pub path: PathBuf,
     pub from: String,
     pub to: String,
     #[serde(skip_serializing_if = "is_default")]
@@ -215,15 +214,7 @@ pub async fn generate_plan(plan: &Plan) -> Result<()> {
 
     writeln!(stdout, "calculating plan...")?;
 
-    let planner = calculate_plan(
-        &plan,
-        order,
-        &workspace,
-        &upstream,
-        workspace_crates,
-        &changed,
-    )
-    .await?;
+    let planner = calculate_plan(&plan, order, &upstream, workspace_crates, &changed).await?;
 
     write_plan(plan, &planner)?;
     writeln!(
@@ -239,7 +230,6 @@ pub async fn generate_plan(plan: &Plan) -> Result<()> {
 async fn calculate_plan(
     plan: &Plan,
     order: Vec<&str>,
-    workspace: &Workspace<'_>,
     upstream: &BTreeMap<String, Vec<Summary>>,
     workspace_crates: BTreeMap<&str, &Package>,
     changed: &BTreeSet<String>,
@@ -284,11 +274,6 @@ async fn calculate_plan(
             bump: BumpKind::Major,
             reason: publish_reason,
             rewrite_dep: rewrite_deps,
-            path: c
-                .root()
-                .strip_prefix(workspace.root())
-                .unwrap()
-                .to_path_buf(),
             remove_feature: old_crate
                 .map(|c| c.remove_feature.clone())
                 .unwrap_or_default(),

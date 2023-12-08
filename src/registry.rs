@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::task::Poll;
 
 use anyhow::{anyhow, Result};
@@ -30,15 +31,20 @@ pub fn get_crate(reg: &mut RegistrySource, name: InternedString) -> Result<Vec<S
 }
 
 pub fn download_crates(reg: &mut RegistrySource, workspace: &Workspace, deps: bool) -> Result<()> {
+    let mut seen = HashSet::new();
+
     for c in workspace.members().filter(|c| c.publish().is_none()) {
         let _ = get_crate(reg, c.name());
+        seen.insert(c.name());
     }
 
     if deps {
         for cra in workspace.members() {
             for dep in cra.dependencies() {
                 if dep.source_id().is_git() || dep.source_id().is_path() {
-                    let _ = get_crate(reg, dep.package_name());
+                    if !seen.contains(dep.package_name().as_str()) {
+                        let _ = get_crate(reg, dep.package_name());
+                    }
                 }
             }
         }

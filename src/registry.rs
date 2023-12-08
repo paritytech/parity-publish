@@ -38,7 +38,7 @@ pub fn download_crates(reg: &mut RegistrySource, workspace: &Workspace, deps: bo
         for cra in workspace.members() {
             for dep in cra.dependencies() {
                 if dep.source_id().is_git() || dep.source_id().is_path() {
-                    let _ = get_crate(reg, cra.name());
+                    let _ = get_crate(reg, dep.package_name());
                 }
             }
         }

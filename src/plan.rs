@@ -263,6 +263,7 @@ async fn calculate_plan(
                 rewrite_deps.push(dep);
             }
         }
+
         let remove_deps =
             remove_git_deps(c, &workspace_crates, upstream, &mut planner.remove_crates);
 
@@ -419,6 +420,10 @@ async fn rewrite_git_deps(
     upstream: &BTreeMap<String, Vec<Summary>>,
 ) -> Result<Vec<RewriteDep>> {
     let mut rewrite = Vec::new();
+
+    if cra.publish().is_some() {
+        return Ok(rewrite);
+    }
 
     for dep in cra.dependencies() {
         if dep.source_id().is_git() && !dep.is_optional() {

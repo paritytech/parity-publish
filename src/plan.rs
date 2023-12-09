@@ -8,6 +8,7 @@ use anyhow::{bail, Context, Result};
 use cargo::core::{dependency::DepKind, Package, Summary, Workspace};
 use semver::{BuildMetadata, Prerelease, Version};
 use termcolor::{ColorChoice, StandardStream};
+use toml_edit::Document;
 
 use crate::{
     changed, check,
@@ -122,6 +123,11 @@ pub fn patch_bump(plan: &Plan) -> Result<()> {
         .context("Can't read Plan.toml")?
         .context("Plan.toml does not exist")?;
 
+    let config = cargo::Config::default()?;
+    config.shell().set_verbosity(cargo::core::Verbosity::Quiet);
+    let manifest_path = plan.path.canonicalize()?.join("Cargo.toml");
+    let workspace = Workspace::new(&manifest_path, &config)?;
+
     for package in &plan.crates {
         let c = planner
             .crates
@@ -141,7 +147,7 @@ pub fn patch_bump(plan: &Plan) -> Result<()> {
         c.reason = Some(PublishReason::Bumped);
     }
 
-    write_plan(plan, &planner)?;
+    write_plan(plan, &workspace, &planner)?;
 
     Ok(())
 }
@@ -216,7 +222,7 @@ pub async fn generate_plan(plan: &Plan) -> Result<()> {
 
     let planner = calculate_plan(&plan, order, &upstream, workspace_crates, &changed).await?;
 
-    write_plan(plan, &planner)?;
+    write_plan(plan, &workspace, &planner)?;
     writeln!(
         stdout,
         "plan generated {} packages {} to publish",
@@ -505,8 +511,26 @@ fn read_plan(plan: &Plan) -> Result<Option<Planner>> {
     }
 }
 
-fn write_plan(plan: &Plan, planner: &Planner) -> Result<()> {
-    let output = toml::to_string_pretty(&planner)?;
+fn write_plan(plan: &Plan, workspace: &Workspace, planner: &Planner) -> Result<()> {
+    let mut planner: Document = toml_edit::ser::to_string_pretty(planner)?.parse()?;
+
+    planner
+        .as_table_mut()
+        .get_mut("crate")
+        .and_then(|c| c.as_array_of_tables_mut())
+        .into_iter()
+        .flat_map(|c| c.iter_mut())
+        .for_each(|c| {
+            c.get_key_value_mut("name").map(|(mut k, v)| {
+                workspace
+                    .members()
+                    .find(|name| Some(name.name().as_str()) == v.as_str())
+                    .and_then(|c| c.root().strip_prefix(workspace.root()).ok())
+                    .map(|c| k.decor_mut().set_prefix(format!("# {}\n", c.display())))
+            });
+        });
+
+    let output = planner.to_string();
     std::fs::write(plan.path.join("Plan.toml"), output)?;
     Ok(())
 }

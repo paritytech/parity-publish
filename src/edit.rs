@@ -110,15 +110,14 @@ pub fn remove_dep_inner(
             .collect::<Vec<_>>();
         if let Ok(dep) = dep {
             if !dep.optional.unwrap_or(false) {
-                bail!(
-                    "can't remove dependency {} from {} as it is not optional ({})",
-                    dep.name,
-                    manifest.package_name().unwrap_or("unknown"),
-                    manifest.path.strip_prefix(workspace.root())?.display()
-                );
+                let remove = RemoveCrate {
+                    name: manifest.package_name()?.to_string(),
+                };
+                remove_crate_inner(workspace, root_manifest, &remove)?;
+            } else {
+                manifest.remove_from_table(&table, dep.toml_key())?;
+                removed.push(dep.toml_key().to_string());
             }
-            manifest.remove_from_table(&table, dep.toml_key())?;
-            removed.push(dep.toml_key().to_string());
         }
     }
 

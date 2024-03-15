@@ -3,8 +3,9 @@ use std::task::Poll;
 
 use anyhow::{anyhow, Result};
 use cargo::sources::source::{QueryKind, Source};
+use cargo::sources::IndexSummary;
 use cargo::{
-    core::{Dependency, SourceId, Summary, Workspace},
+    core::{Dependency, SourceId, Workspace},
     sources::RegistrySource,
     util::interning::InternedString,
 };
@@ -19,7 +20,7 @@ pub fn get_registry<'a>(workspace: &Workspace<'a>) -> Result<RegistrySource<'a>>
     Ok(reg)
 }
 
-pub fn get_crate(reg: &mut RegistrySource, name: InternedString) -> Result<Vec<Summary>> {
+pub fn get_crate(reg: &mut RegistrySource, name: InternedString) -> Result<Vec<IndexSummary>> {
     match reg.query_vec(
         &Dependency::parse(name, None, reg.source_id())?,
         QueryKind::Fuzzy,

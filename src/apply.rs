@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use cargo::{
     core::{dependency::DepKind, resolver::CliFeatures, FeatureValue, Package, Workspace},
     ops::{Packages, PublishOpts},
-    util::toml_mut::manifest::LocalManifest,
+    util::{cache_lock::CacheLockMode, toml_mut::manifest::LocalManifest},
 };
 
 use semver::Version;
@@ -105,7 +105,7 @@ fn publish(
 
     let workspace = Workspace::new(&path.join("Cargo.toml"), config)?;
 
-    let _lock = config.acquire_package_cache_lock()?;
+    let _lock = config.acquire_package_cache_lock(CacheLockMode::DownloadExclusive)?;
     let mut reg = registry::get_registry(&workspace)?;
     registry::download_crates(&mut reg, &workspace, false)?;
 
@@ -167,7 +167,7 @@ fn version_exists(reg: &mut cargo::sources::RegistrySource, name: &str, ver: &st
     let ver = Version::parse(ver).unwrap();
 
     if let Ok(c) = c {
-        if c.iter().any(|v| v.version() == &ver) {
+        if c.iter().any(|v| v.as_summary().version() == &ver) {
             return true;
         }
     }

@@ -6,7 +6,11 @@ use std::{
 };
 
 use anyhow::{bail, Context, Result};
-use cargo::core::{dependency::DepKind, Package, Summary, Workspace};
+use cargo::{
+    core::{dependency::DepKind, Package, Workspace},
+    sources::IndexSummary,
+    util::cache_lock::CacheLockMode,
+};
 use semver::{BuildMetadata, Prerelease, Version};
 use termcolor::{ColorChoice, StandardStream};
 use toml_edit::DocumentMut;
@@ -201,7 +205,9 @@ pub async fn generate_plan(plan: &Plan) -> Result<()> {
 
     let order = order(&mut stdout, &workspace)?;
 
-    let _lock = workspace.config().acquire_package_cache_lock()?;
+    let _lock = workspace
+        .config()
+        .acquire_package_cache_lock(CacheLockMode::DownloadExclusive)?;
     let mut reg = registry::get_registry(&workspace)?;
 
     writeln!(stdout, "looking up crates...",)?;
@@ -244,7 +250,7 @@ pub async fn generate_plan(plan: &Plan) -> Result<()> {
 async fn calculate_plan(
     plan: &Plan,
     order: Vec<&str>,
-    upstream: &BTreeMap<String, Vec<Summary>>,
+    upstream: &BTreeMap<String, Vec<IndexSummary>>,
     workspace_crates: BTreeMap<&str, &Package>,
     changed: &BTreeSet<String>,
 ) -> Result<Planner> {
@@ -270,7 +276,7 @@ async fn calculate_plan(
         // if the version is already taken assume it's from a previous pre release and use this
         // version instead of making a new release
         if let Some(upstreamc) = upstreamc {
-            if upstreamc.iter().any(|u| u.version() == &to) && !to.pre.is_empty() {
+            if upstreamc.iter().any(|u| u.as_summary().version() == &to) && !to.pre.is_empty() {
                 publish_reason = None;
             }
         }
@@ -307,14 +313,14 @@ async fn calculate_plan(
 
 fn get_versions(
     plan: &Plan,
-    upstreamc: Option<&Vec<Summary>>,
+    upstreamc: Option<&Vec<IndexSummary>>,
     c: &Package,
     publish: bool,
     old_crate: Option<&Publish>,
 ) -> Result<(Version, Version)> {
     let from = upstreamc
         .and_then(|u| max_ver(u, plan.pre.is_some()))
-        .map(|u| u.version().clone())
+        .map(|u| u.as_summary().version().clone())
         .unwrap_or(Version::parse("0.1.0").unwrap());
 
     if let Some(oldc) = old_crate {
@@ -393,7 +399,7 @@ fn is_publish(
 fn remove_git_deps(
     cra: &Package,
     workspace_crates: &BTreeMap<&str, &Package>,
-    upstream: &BTreeMap<String, Vec<Summary>>,
+    upstream: &BTreeMap<String, Vec<IndexSummary>>,
     remove_crate: &mut Vec<RemoveCrate>,
 ) -> Vec<RemoveDep> {
     let mut remove_deps = Vec::new();
@@ -437,7 +443,7 @@ fn remove_git_deps(
 async fn rewrite_git_deps(
     cra: &Package,
     workspace_crates: &BTreeMap<&str, &Package>,
-    upstream: &BTreeMap<String, Vec<Summary>>,
+    upstream: &BTreeMap<String, Vec<IndexSummary>>,
 ) -> Result<Vec<RewriteDep>> {
     let mut rewrite = Vec::new();
 
@@ -454,6 +460,7 @@ async fn rewrite_git_deps(
                     .with_context(|| {
                         format!("crate {} has no crates.io release", dep.package_name())
                     })?
+                    .as_summary()
                     .version();
 
                 rewrite.push(RewriteDep {
@@ -540,7 +547,10 @@ fn write_plan(plan: &Plan, workspace: &Workspace, planner: &Planner) -> Result<(
                     .members()
                     .find(|name| Some(name.name().as_str()) == v.as_str())
                     .and_then(|c| c.root().strip_prefix(workspace.root()).ok())
-                    .map(|c| k.decor_mut().set_prefix(format!("# {}\n", c.display())))
+                    .map(|c| {
+                        k.dotted_decor_mut()
+                            .set_prefix(format!("# {}\n", c.display()))
+                    })
             });
         });
 
@@ -559,9 +569,9 @@ fn write_plan(plan: &Plan, workspace: &Workspace, planner: &Planner) -> Result<(
     Ok(())
 }
 
-fn max_ver(crates: &[Summary], pre: bool) -> Option<&Summary> {
+fn max_ver(crates: &[IndexSummary], pre: bool) -> Option<&IndexSummary> {
     crates
         .iter()
-        .filter(|c| pre || c.version().pre.is_empty())
-        .max_by_key(|c| c.version())
+        .filter(|c| pre || c.as_summary().version().pre.is_empty())
+        .max_by_key(|c| c.as_summary().version())
 }

@@ -9,7 +9,7 @@ license = "Apache-2.0"
 
 [dependencies]
 anyhow = "1.0.81"
-cargo = "0.75.0"
+cargo = "0.77.0"
 cargo-semver-checks = "0.29.1"
 clap = { version = "4.5.2", features = ["derive"] }
 crates_io_api = "0.9.0"
@@ -21,5 +21,5 @@ termcolor = "1.4.1"
 tokio = { version = "1.36.0", features = ["rt-multi-thread", "macros"] }
 toml = { version = "0.8.11", features = ["preserve_order"] }
 toml_edit = "0.22.7"
-toml_edit_cargo = { version = "0.19.15", package = "toml_edit" }
+toml_edit_cargo = { version = "0.21.0", package = "toml_edit" }
 walkdir = "2.5.0"

@@ -64,9 +64,6 @@ pub struct Planner {
 
 #[derive(serde::Serialize, serde::Deserialize, Default)]
 pub struct Publish {
-    #[serde(default = "bool_true")]
-    #[serde(skip_serializing_if = "is_not_default")]
-    pub publish: bool,
     pub name: String,
     pub from: String,
     pub to: String,
@@ -76,6 +73,12 @@ pub struct Publish {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
     pub reason: Option<PublishReason>,
+    #[serde(default = "bool_true")]
+    #[serde(skip_serializing_if = "is_not_default")]
+    pub publish: bool,
+    #[serde(skip_serializing_if = "is_not_default")]
+    #[serde(default = "bool_true")]
+    pub verify: bool,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(default)]
     pub rewrite_dep: Vec<RewriteDep>,
@@ -85,9 +88,6 @@ pub struct Publish {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(default)]
     pub remove_feature: Vec<RemoveFeature>,
-    #[serde(skip_serializing_if = "is_not_default")]
-    #[serde(default = "bool_true")]
-    pub verify: bool,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default, Clone)]

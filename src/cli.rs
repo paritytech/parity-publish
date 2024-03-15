@@ -84,6 +84,9 @@ pub struct Changed {
 
 #[derive(Parser, Debug)]
 pub struct Plan {
+    /// Suffix crate descriptions with given string
+    #[arg(long, short)]
+    pub description: Option<String>,
     /// add a pre release part to the published version
     #[arg(long, short)]
     pub pre: Option<String>,

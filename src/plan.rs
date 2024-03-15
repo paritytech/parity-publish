@@ -44,7 +44,14 @@ pub enum PublishReason {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default)]
+pub struct Options {
+    pub description: Option<String>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Default)]
 pub struct Planner {
+    #[serde(default)]
+    pub options: Options,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(default)]
     #[serde(rename = "crate")]
@@ -244,6 +251,12 @@ async fn calculate_plan(
     let old_plan = read_plan(plan)?.unwrap_or_default();
     let mut planner = Planner::default();
     let mut new_versions = BTreeMap::new();
+
+    planner.options = old_plan.options;
+
+    if plan.description.is_some() {
+        planner.options.description = plan.description.clone();
+    }
 
     for c in order {
         let upstreamc = upstream.get(c);

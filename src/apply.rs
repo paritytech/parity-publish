@@ -66,7 +66,7 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
         };
         let mut manifest = LocalManifest::try_new(c.manifest_path())?;
         edit::set_version(&mut manifest, &pkg.to)?;
-        edit::fix_description(&mut manifest, &pkg.name)?;
+        edit::set_description(&plan, &mut manifest, &pkg.name)?;
 
         for remove_dep in &pkg.remove_dep {
             edit::remove_dep(&workspace, &mut manifest, remove_dep)?;

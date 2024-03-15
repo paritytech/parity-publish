@@ -1,7 +1,7 @@
 use std::fs::read_to_string;
 use std::path::Path;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use cargo::core::{FeatureValue, Workspace};
 use cargo::util::toml_mut::dependency::RegistrySource;
 use cargo::util::toml_mut::manifest::LocalManifest;
@@ -285,15 +285,26 @@ pub fn remove_feature(manifest: &mut LocalManifest, remove_feature: &RemoveFeatu
 }
 
 // hack because come crates don't have a desc
-pub fn fix_description(manifest: &mut LocalManifest, name: &str) -> Result<()> {
+pub fn set_description(plan: &Planner, manifest: &mut LocalManifest, name: &str) -> Result<()> {
     let package = manifest.manifest.get_table_mut(&["package".to_string()])?;
 
-    if package.get("description").is_none() {
-        package
-            .as_table_mut()
-            .unwrap()
-            .insert("description", toml_edit_cargo::value(name));
+    let mut desc = if let Some(desc) = package.get("description") {
+        desc.as_str().unwrap().to_string()
+    } else {
+        name.to_string()
+    };
+
+    if let Some(suffix) = &plan.options.description {
+        let suffix = format!(" ({})", suffix);
+        if !desc.ends_with(&suffix) {
+            desc.push_str(&suffix);
+        }
     }
+
+    package
+        .as_table_mut()
+        .unwrap()
+        .insert("description", toml_edit_cargo::value(desc));
 
     Ok(())
 }

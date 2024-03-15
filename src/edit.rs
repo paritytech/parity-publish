@@ -7,7 +7,7 @@ use cargo::util::toml_mut::dependency::RegistrySource;
 use cargo::util::toml_mut::manifest::LocalManifest;
 use cargo::{core::dependency::DepKind, util::toml_mut::dependency::PathSource};
 use semver::Version;
-use toml_edit::Document;
+use toml_edit::DocumentMut;
 
 use crate::plan::{Planner, RemoveCrate, RemoveDep, RemoveFeature, RewriteDep};
 
@@ -84,7 +84,7 @@ pub fn remove_dep(
     dep: &RemoveDep,
 ) -> Result<()> {
     let root_manifest = read_to_string(workspace.root_manifest())?;
-    let mut root_manifest: Document = root_manifest.parse()?;
+    let mut root_manifest: DocumentMut = root_manifest.parse()?;
     remove_dep_inner(workspace, &mut root_manifest, manifest, dep)?;
     let root_manifest = root_manifest.to_string();
     std::fs::write(workspace.root_manifest(), &root_manifest)?;
@@ -93,7 +93,7 @@ pub fn remove_dep(
 
 pub fn remove_dep_inner(
     workspace: &Workspace,
-    root_manifest: &mut Document,
+    root_manifest: &mut DocumentMut,
     manifest: &mut LocalManifest,
     dep: &RemoveDep,
 ) -> Result<()> {
@@ -132,7 +132,7 @@ pub fn remove_dep_inner(
 
 pub fn remove_features_of_dep(
     workspace: &Workspace,
-    root_manifest: &mut Document,
+    root_manifest: &mut DocumentMut,
     manifest: &mut LocalManifest,
     toml_key: &str,
 ) -> Result<()> {
@@ -211,7 +211,7 @@ pub fn remove_features_of_dep(
 
 pub fn remove_dep_feature_all(
     workspace: &Workspace,
-    root_manifest: &mut Document,
+    root_manifest: &mut DocumentMut,
     name: &str,
     value: &str,
 ) -> Result<()> {
@@ -318,7 +318,7 @@ pub fn set_version(manifest: &mut LocalManifest, new_ver: &str) -> Result<()> {
 
 pub fn remove_crate(workspace: &Workspace, remove_c: &RemoveCrate) -> Result<()> {
     let root_manifest = read_to_string(workspace.root_manifest())?;
-    let mut root_manifest: Document = root_manifest.parse()?;
+    let mut root_manifest: DocumentMut = root_manifest.parse()?;
     remove_crate_inner(workspace, &mut root_manifest, remove_c)?;
     let root_manifest = root_manifest.to_string();
     std::fs::write(workspace.root_manifest(), &root_manifest)?;
@@ -327,7 +327,7 @@ pub fn remove_crate(workspace: &Workspace, remove_c: &RemoveCrate) -> Result<()>
 
 pub fn remove_crate_inner(
     workspace: &Workspace,
-    manifest: &mut Document,
+    manifest: &mut DocumentMut,
     remove_c: &RemoveCrate,
 ) -> Result<()> {
     let path = workspace
@@ -352,7 +352,7 @@ pub fn remove_crate_inner(
 
 pub fn remove_dep_all(
     workspace: &Workspace,
-    root_manifest: &mut Document,
+    root_manifest: &mut DocumentMut,
     remove_c: &str,
 ) -> Result<()> {
     for c in workspace.members() {

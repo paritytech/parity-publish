@@ -9,7 +9,7 @@ use anyhow::{bail, Context, Result};
 use cargo::core::{dependency::DepKind, Package, Summary, Workspace};
 use semver::{BuildMetadata, Prerelease, Version};
 use termcolor::{ColorChoice, StandardStream};
-use toml_edit::Document;
+use toml_edit::DocumentMut;
 
 use crate::{
     changed, check,
@@ -526,7 +526,7 @@ fn read_plan(plan: &Plan) -> Result<Option<Planner>> {
 }
 
 fn write_plan(plan: &Plan, workspace: &Workspace, planner: &Planner) -> Result<()> {
-    let mut planner: Document = toml_edit::ser::to_string_pretty(planner)?.parse()?;
+    let mut planner: DocumentMut = toml_edit::ser::to_string_pretty(planner)?.parse()?;
 
     planner
         .as_table_mut()

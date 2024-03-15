@@ -182,7 +182,7 @@ fn manifest_changed(root: &Path, path: &str, from: &str, to: &str) -> Result<boo
     struct Sorter;
 
     impl VisitMut for Sorter {
-        fn visit_document_mut(&mut self, node: &mut toml_edit::Document) {
+        fn visit_document_mut(&mut self, node: &mut toml_edit::DocumentMut) {
             node.set_trailing("");
         }
 
@@ -206,8 +206,8 @@ fn manifest_changed(root: &Path, path: &str, from: &str, to: &str) -> Result<boo
         return Ok(false);
     };
 
-    let mut old = toml_edit::Document::from_str(&old)?;
-    let mut new = toml_edit::Document::from_str(&new)?;
+    let mut old = toml_edit::DocumentMut::from_str(&old)?;
+    let mut new = toml_edit::DocumentMut::from_str(&new)?;
 
     for c in [&mut old, &mut new] {
         c.remove("dependencies");

@@ -123,6 +123,8 @@ fn publish(
         total, skipped
     )?;
 
+    drop(_lock);
+
     for pkg in plan.crates.iter().filter(|c| c.publish) {
         if version_exists(&mut reg, &pkg.name, &pkg.to) {
             continue;

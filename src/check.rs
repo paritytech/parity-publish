@@ -12,7 +12,10 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use cargo::core::{dependency::DepKind, Workspace};
+use cargo::{
+    core::{dependency::DepKind, Workspace},
+    util_semver::VersionExt,
+};
 use termcolor::{ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 struct NamePath {
@@ -29,6 +32,8 @@ struct Issues {
     unpublished: bool,
     taken: bool,
     broken_readme: bool,
+    prerelease: bool,
+    version_zero: bool,
     needs_publish: Option<Vec<NamePath>>,
 }
 
@@ -40,6 +45,8 @@ impl Issues {
             || self.needs_publish.is_some()
             || self.no_desc
             || self.unpublished
+            || self.prerelease
+            || self.version_zero
     }
 
     fn ret_err(&self, check: &Check) -> bool {
@@ -49,6 +56,8 @@ impl Issues {
             || self.taken
             || self.broken_readme
             || self.needs_publish.is_some()
+            || self.prerelease
+            || self.version_zero
             || no_desc
             || unpublished
     }
@@ -84,6 +93,12 @@ impl Issues {
             }
             if self.broken_readme {
                 writeln!(stdout, "    readme specified in Cargo.toml doesnt exist")?;
+            }
+            if self.version_zero {
+                writeln!(stdout, "    version is 0.0.0. Should be at least 0.1.0")?;
+            }
+            if self.prerelease {
+                writeln!(stdout, "    version should not be prerelease")?;
             }
             if let Some(ref deps) = self.needs_publish {
                 writeln!(
@@ -258,6 +273,13 @@ async fn issues(check: &Check) -> Result<Vec<Issues>> {
                     issues.broken_readme = true;
                 }
             }
+
+            if c.version().major == 0 && c.version().minor == 0 {
+                issues.version_zero = true;
+            }
+            if c.version().is_prerelease() {
+                issues.prerelease = true;
+            }
         }
 
         issues.needs_publish = should_publish.get(c.name().as_str()).map(|deps| {
@@ -278,6 +300,7 @@ async fn issues(check: &Check) -> Result<Vec<Issues>> {
                 })
                 .collect()
         });
+
         all_issues.push(issues);
     }
 

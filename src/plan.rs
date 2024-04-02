@@ -141,11 +141,13 @@ pub fn patch_bump(plan: &Plan) -> Result<()> {
     let workspace = Workspace::new(&manifest_path, &config)?;
 
     for package in &plan.crates {
-        let c = planner
-            .crates
-            .iter_mut()
-            .find(|c| c.name == *package)
-            .with_context(|| format!("could not find crate '{}' in Plan.toml", package))?;
+        let c = planner.crates.iter_mut().find(|c| c.name == *package);
+
+        let Some(c) = c else {
+            continue;
+        };
+
+        //.with_context(|| format!("could not find crate '{}' in Plan.toml", package))?;
 
         if !c.publish {
             bail!("crate '{}' is set not to publish", package);
@@ -329,7 +331,7 @@ fn get_versions(
 
     let mut to = from.clone();
 
-    if !publish {
+    if !publish || plan.hold_version {
         return Ok((from, to));
     }
 

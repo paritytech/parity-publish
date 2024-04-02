@@ -108,6 +108,9 @@ pub struct Plan {
     /// Patch bump the specified crates
     #[arg(long)]
     pub patch: bool,
+    /// Don't bump versions when generating plan
+    #[arg(long)]
+    pub hold_version: bool,
     #[arg(default_value = ".")]
     /// Path to the cargo workspace
     pub path: PathBuf,

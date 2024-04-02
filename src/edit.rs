@@ -34,7 +34,7 @@ pub fn rewrite_deps(
             plan.crates
                 .iter()
                 .find(|c| c.name == toml_name)
-                .context("cant find package")?
+                .context("cant find package ".to_string() + toml_name)?
                 .to
                 .clone()
         };

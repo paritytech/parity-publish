@@ -24,7 +24,7 @@ async fn main() -> Result<()> {
         cli::Command::Claim(claim) => claim::handle_claim(claim).await,
         cli::Command::Changed(changed) => changed::handle_changed(changed).await,
         cli::Command::Prdoc(prdoc) => prdoc::handle_prdoc(prdoc),
-        cli::Command::Breaking(breaking) => public_api::handle_public_api(breaking),
+        cli::Command::Semver(semver) => public_api::handle_public_api(semver),
         cli::Command::Plan(plan) => plan::handle_plan(plan).await,
         cli::Command::Apply(apply) => apply::handle_apply(apply).await,
         cli::Command::Check(check) => check::handle_check(check).await,

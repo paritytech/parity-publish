@@ -16,8 +16,8 @@ pub enum Command {
     Status(Status),
     /// Claim ownership of unpublished crates on crates.io
     Claim(Claim),
-    /// Find crates which have api breaking changes
-    Breaking(Breaking),
+    /// Find crates that have major or minor semver changes
+    Semver(Semver),
     /// Find crates marked as changed in prdoc
     Prdoc(Prdoc),
     /// Find what crates have changed since last crates.io release
@@ -62,7 +62,7 @@ pub struct Claim {
 }
 
 #[derive(Parser, Debug)]
-pub struct Breaking {
+pub struct Semver {
     /// Path to the cargo workspace
     pub path: PathBuf,
 }

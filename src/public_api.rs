@@ -1,16 +1,16 @@
 use anyhow::Result;
 use cargo::{
-    core::{PackageId, Workspace},
+    core::Workspace,
     sources::{source::Source, RegistrySource},
     util::cache_lock::CacheLockMode,
     util_semver::VersionExt,
 };
-use std::{collections::HashSet, hash::Hash, io::Write};
+use std::{collections::HashSet, io::Write};
 use termcolor::{ColorChoice, StandardStream};
 
-use crate::{cli::Breaking, registry};
+use crate::{cli::Semver, registry};
 
-pub fn handle_public_api(breaking: Breaking) -> Result<()> {
+pub fn handle_public_api(breaking: Semver) -> Result<()> {
     let mut stdout = StandardStream::stdout(ColorChoice::Auto);
     let config = cargo::Config::default()?;
     config.shell().set_verbosity(cargo::core::Verbosity::Quiet);

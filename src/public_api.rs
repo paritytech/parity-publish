@@ -94,15 +94,11 @@ pub fn handle_public_api(mut breaking: Semver) -> Result<()> {
     drop(download);
     drop(_lock);
     writeln!(stderr, "building crates...",)?;
-    let mut n = 0;
 
     for c in workspace.members() {
         let Some(upstream) = upstreams.iter().find(|u| c.name() == u.name()) else {
             continue;
         };
-
-        n += 1;
-        println!("{}", n);
 
         let json_path = rustdoc_json::Builder::default()
             .toolchain("nightly")

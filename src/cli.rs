@@ -74,6 +74,9 @@ pub struct Semver {
     pub major: bool,
     /// Path to the cargo workspace
     pub path: PathBuf,
+    /// Crates to check
+    #[arg(default_values_t = Vec::<String>::new())]
+    pub crates: Vec<String>,
 }
 
 #[derive(Parser, Debug)]

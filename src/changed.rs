@@ -31,9 +31,9 @@ pub enum ChangeKind {
 impl Display for ChangeKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ChangeKind::Files => f.write_str("files"),
-            ChangeKind::Manifest => f.write_str("manifest"),
-            ChangeKind::Dependency => f.write_str("dependency"),
+            ChangeKind::Files => f.write_str("Files"),
+            ChangeKind::Manifest => f.write_str("Manifest"),
+            ChangeKind::Dependency => f.write_str("Dependency"),
         }
     }
 }

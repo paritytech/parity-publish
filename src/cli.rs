@@ -72,6 +72,9 @@ pub struct Semver {
     /// Only print breaking changes
     #[arg(long, short)]
     pub major: bool,
+    /// Verbose output
+    #[arg(long, short)]
+    pub verbose: bool,
     /// Path to the cargo workspace
     pub path: PathBuf,
     /// Crates to check
@@ -104,6 +107,7 @@ pub struct Changed {
     /// Only print crate names
     #[arg(long, short)]
     pub quiet: bool,
+    /// Verbose output
     #[arg(long, short)]
     pub verbose: bool,
     /// Don't include packages that have has a dependency change

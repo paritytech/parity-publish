@@ -5,17 +5,20 @@ use cargo::{
     util::cache_lock::CacheLockMode,
     util_semver::VersionExt,
 };
-use std::collections::HashSet;
+use public_api::diff::PublicApiDiff;
 use std::io::Write;
-use termcolor::WriteColor;
+use std::{collections::HashSet, path::PathBuf};
+use termcolor::{Color, WriteColor};
 use termcolor::{ColorChoice, ColorSpec, StandardStream};
 
-use crate::{
-    changed::{Change, ChangeKind},
-    cli::Semver,
-    plan::BumpKind,
-    registry,
-};
+use crate::{cli::Semver, plan::BumpKind, registry};
+
+struct Change {
+    name: String,
+    path: PathBuf,
+    bump: BumpKind,
+    diff: PublicApiDiff,
+}
 
 pub fn handle_public_api(breaking: Semver) -> Result<()> {
     let mut stdout = StandardStream::stdout(ColorChoice::Auto);
@@ -120,15 +123,15 @@ pub fn handle_public_api(breaking: Semver) -> Result<()> {
             changes.push(Change {
                 name: c.name().to_string(),
                 path: path.to_owned(),
-                kind: ChangeKind::Files,
                 bump: BumpKind::Major,
+                diff,
             })
         } else if !diff.added.is_empty() && !breaking.major {
             changes.push(Change {
                 name: c.name().to_string(),
                 path: path.to_owned(),
-                kind: ChangeKind::Files,
                 bump: BumpKind::Minor,
+                diff,
             })
         }
     }
@@ -146,7 +149,27 @@ pub fn handle_public_api(breaking: Semver) -> Result<()> {
             stdout.set_color(ColorSpec::new().set_bold(false))?;
             writeln!(stdout, " ({}):", c.path.display())?;
             writeln!(stdout, "    {}", c.bump)?;
+            if breaking.verbose {
+                if c.bump == BumpKind::Major {
+                    for change in &c.diff.removed {
+                        stdout.set_color(ColorSpec::new().set_fg(Some(Color::Red)))?;
+                        writeln!(stdout, "   -{}", change)?;
+                    }
+                    for change in &c.diff.changed {
+                        stdout.set_color(ColorSpec::new().set_fg(Some(Color::Red)))?;
+                        writeln!(stdout, "   -{}", change.old)?;
+                        stdout.set_color(ColorSpec::new().set_fg(Some(Color::Green)))?;
+                        writeln!(stdout, "   +{}", change.new)?;
+                    }
+                } else {
+                    for change in &c.diff.added {
+                        stdout.set_color(ColorSpec::new().set_fg(Some(Color::Green)))?;
+                        writeln!(stdout, "   +{}", change)?;
+                    }
+                }
+            }
             writeln!(stdout)?;
+            stdout.set_color(&ColorSpec::new())?;
         }
     }
 

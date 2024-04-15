@@ -16,6 +16,8 @@ pub enum Command {
     Status(Status),
     /// Claim ownership of unpublished crates on crates.io
     Claim(Claim),
+    /// Find crates which have api breaking changes
+    Breaking(Breaking),
     /// Find crates marked as changed in prdoc
     Prdoc(Prdoc),
     /// Find what crates have changed since last crates.io release
@@ -55,6 +57,12 @@ pub struct Claim {
     #[arg(long, short)]
     pub dry_run: bool,
     #[arg(default_value = ".")]
+    /// Path to the cargo workspace
+    pub path: PathBuf,
+}
+
+#[derive(Parser, Debug)]
+pub struct Breaking {
     /// Path to the cargo workspace
     pub path: PathBuf,
 }

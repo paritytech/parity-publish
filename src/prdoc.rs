@@ -89,6 +89,10 @@ pub fn handle_prdoc(prdoc: Prdoc) -> Result<()> {
     let prdocs = get_prdocs(&workspace, &prdoc.prdoc_path, deps)?;
 
     for c in prdocs {
+        if prdoc.major && c.bump != BumpKind::Major {
+            continue;
+        }
+
         if prdoc.paths >= 2 {
             writeln!(stdout, "{}", c.path.join("Cargo.toml").display())?;
         } else if prdoc.paths == 1 {

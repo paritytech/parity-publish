@@ -107,6 +107,9 @@ pub struct Prdoc {
     /// Just print paths, pass twice to print manifests
     #[arg(long, short, action = ArgAction::Count)]
     pub paths: u8,
+    /// Only print breaking changes
+    #[arg(long, short)]
+    pub major: bool,
     /// Only print crate names
     #[arg(long, short)]
     pub quiet: bool,

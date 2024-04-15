@@ -41,6 +41,9 @@ pub fn handle_public_api(breaking: Semver) -> Result<()> {
         if c.publish().is_some() {
             continue;
         }
+        if c.library().is_none() {
+            continue;
+        }
 
         let upstream = registry::get_crate(&mut reg, c.name())?;
         let upstream = upstream

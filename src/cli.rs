@@ -117,6 +117,9 @@ pub struct Prdoc {
     pub path: PathBuf,
     /// Path to prdoc dir
     pub prdoc_path: PathBuf,
+    /// Limit output to specified crates
+    #[arg(default_values_t = Vec::<String>::new())]
+    pub crates: Vec<String>,
 }
 
 #[derive(Parser, Debug)]

@@ -10,6 +10,7 @@ use termcolor::{ColorChoice, ColorSpec, StandardStream, WriteColor};
 use crate::changed::{find_indirect_changes, Change, ChangeKind};
 use crate::cli::Prdoc;
 use crate::plan::BumpKind;
+use crate::shared::read_stdin;
 
 #[derive(serde::Deserialize)]
 struct Document {
@@ -23,7 +24,12 @@ struct Crates {
     bump: String,
 }
 
-pub fn get_prdocs(workspace: &Workspace, path: &Path, deps: bool) -> Result<Vec<Change>> {
+pub fn get_prdocs(
+    workspace: &Workspace,
+    path: &Path,
+    deps: bool,
+    filter: &[String],
+) -> Result<Vec<Change>> {
     let mut entries = HashMap::new();
 
     if path.is_file() {
@@ -42,7 +48,11 @@ pub fn get_prdocs(workspace: &Workspace, path: &Path, deps: bool) -> Result<Vec<
         }
     }
 
-    let mut entries = entries.into_values().into_iter().collect();
+    let mut entries = entries.into_values().into_iter().collect::<Vec<_>>();
+
+    if !filter.is_empty() {
+        entries.retain(|e| filter.contains(&e.name));
+    }
 
     if deps {
         find_indirect_changes(workspace, &mut entries);
@@ -78,7 +88,8 @@ fn read_prdoc(
     })
 }
 
-pub fn handle_prdoc(prdoc: Prdoc) -> Result<()> {
+pub fn handle_prdoc(mut prdoc: Prdoc) -> Result<()> {
+    read_stdin(&mut prdoc.crates)?;
     let mut stdout = StandardStream::stdout(ColorChoice::Auto);
     let config = cargo::Config::default()?;
     config.shell().set_verbosity(cargo::core::Verbosity::Quiet);
@@ -86,7 +97,7 @@ pub fn handle_prdoc(prdoc: Prdoc) -> Result<()> {
     let workspace = Workspace::new(&path, &config)?;
     let deps = !prdoc.no_deps;
 
-    let prdocs = get_prdocs(&workspace, &prdoc.prdoc_path, deps)?;
+    let prdocs = get_prdocs(&workspace, &prdoc.prdoc_path, deps, &prdoc.crates)?;
 
     for c in prdocs {
         if prdoc.major && c.bump != BumpKind::Major {

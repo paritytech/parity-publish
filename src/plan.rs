@@ -217,7 +217,7 @@ pub async fn generate_plan(plan: &Plan) -> Result<()> {
         )?;
         changed.into_iter().map(|c| c.name).collect()
     } else if let Some(path) = &plan.prdoc {
-        let changed = prdoc::get_prdocs(&workspace, path, true)?;
+        let changed = prdoc::get_prdocs(&workspace, path, true, &[])?;
         let indirect = changed
             .iter()
             .filter(|c| matches!(c.kind, changed::ChangeKind::Dependency))

@@ -19,7 +19,7 @@ use toml_edit::DocumentMut;
 use crate::{
     changed, check,
     cli::{Check, Plan},
-    registry,
+    prdoc, registry,
     shared::*,
 };
 
@@ -204,6 +204,19 @@ pub async fn generate_plan(plan: &Plan) -> Result<()> {
 
     let changed = if let Some(from) = &plan.since {
         let changed = changed::get_changed_crates(&workspace, true, from, "HEAD")?;
+        let indirect = changed
+            .iter()
+            .filter(|c| matches!(c.kind, changed::ChangeKind::Dependency))
+            .count();
+        writeln!(
+            stdout,
+            "{} packages changed {} indirect",
+            changed.len(),
+            indirect
+        )?;
+        changed.into_iter().map(|c| c.name).collect()
+    } else if let Some(path) = &plan.prdoc {
+        let changed = prdoc::get_prdocs(&workspace, path, true)?;
         let indirect = changed
             .iter()
             .filter(|c| matches!(c.kind, changed::ChangeKind::Dependency))

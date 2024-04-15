@@ -23,7 +23,7 @@ struct Crates {
     bump: String,
 }
 
-fn get_prdocs(workspace: &Workspace, path: &Path, deps: bool) -> Result<Vec<Change>> {
+pub fn get_prdocs(workspace: &Workspace, path: &Path, deps: bool) -> Result<Vec<Change>> {
     let dirs = read_dir(path).context("failed to read prdoc dir")?;
     let mut entries = HashMap::new();
 

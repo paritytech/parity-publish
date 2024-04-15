@@ -7,13 +7,20 @@ use cargo::{
 };
 use std::collections::HashSet;
 use std::io::Write;
-use termcolor::{ColorChoice, StandardStream};
+use termcolor::WriteColor;
+use termcolor::{ColorChoice, ColorSpec, StandardStream};
 
-use crate::{cli::Semver, registry};
+use crate::{
+    changed::{Change, ChangeKind},
+    cli::Semver,
+    plan::BumpKind,
+    registry,
+};
 
 pub fn handle_public_api(breaking: Semver) -> Result<()> {
     let mut stdout = StandardStream::stdout(ColorChoice::Auto);
     let mut stderr = StandardStream::stderr(ColorChoice::Auto);
+    let mut changes = Vec::new();
     let config = cargo::Config::default()?;
     config.shell().set_verbosity(cargo::core::Verbosity::Quiet);
     let path = breaking.path.canonicalize()?.join("Cargo.toml");
@@ -100,15 +107,42 @@ pub fn handle_public_api(breaking: Semver) -> Result<()> {
             .build()?;
 
         let old = public_api::Builder::from_rustdoc_json(json_path).build()?;
+        let path = c.root().strip_prefix(workspace.root()).unwrap();
 
         let diff = public_api::diff::PublicApiDiff::between(old, new);
         if !diff.changed.is_empty() || !diff.removed.is_empty() {
-            println!("{} {} major change", c.name(), upstream.version());
-        } else if !diff.added.is_empty() {
-            println!("{} {} minor change", c.name(), upstream.version());
-        } else {
-            println!("{} {} no change", c.name(), upstream.version());
+            changes.push(Change {
+                name: c.name().to_string(),
+                path: path.to_owned(),
+                kind: ChangeKind::Files,
+                bump: BumpKind::Major,
+            })
+        } else if !diff.added.is_empty() && !breaking.major {
+            changes.push(Change {
+                name: c.name().to_string(),
+                path: path.to_owned(),
+                kind: ChangeKind::Files,
+                bump: BumpKind::Minor,
+            })
         }
     }
+
+    for c in changes {
+        if breaking.paths >= 2 {
+            writeln!(stdout, "{}", c.path.join("Cargo.toml").display())?;
+        } else if breaking.paths == 1 {
+            writeln!(stdout, "{}", c.path.display())?;
+        } else if breaking.quiet {
+            writeln!(stdout, "{}", c.name)?;
+        } else {
+            stdout.set_color(ColorSpec::new().set_bold(true))?;
+            write!(stdout, "{}", c.name)?;
+            stdout.set_color(ColorSpec::new().set_bold(false))?;
+            writeln!(stdout, " ({}):", c.path.display())?;
+            writeln!(stdout, "    {}", c.bump)?;
+            writeln!(stdout)?;
+        }
+    }
+
     Ok(())
 }

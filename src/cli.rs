@@ -63,6 +63,15 @@ pub struct Claim {
 
 #[derive(Parser, Debug)]
 pub struct Semver {
+    /// Just print paths, pass twice to print manifests
+    #[arg(long, short, action = ArgAction::Count)]
+    pub paths: u8,
+    /// Only print crate names
+    #[arg(long, short)]
+    pub quiet: bool,
+    /// Only print breaking changes
+    #[arg(long, short)]
+    pub major: bool,
     /// Path to the cargo workspace
     pub path: PathBuf,
 }

@@ -14,8 +14,8 @@ pub fn get_registry<'a>(workspace: &Workspace<'a>) -> Result<RegistrySource<'a>>
     let whitelist = workspace.members().map(|c| c.package_id()).collect();
     let config = workspace.config();
 
-    let mut reg = RegistrySource::remote(SourceId::crates_io(config)?, &whitelist, config)?;
-    reg.invalidate_cache();
+    let reg = RegistrySource::remote(SourceId::crates_io(config)?, &whitelist, config)?;
+    //reg.invalidate_cache();
 
     Ok(reg)
 }

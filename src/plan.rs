@@ -1,6 +1,7 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     env::args,
+    fmt::Display,
     io::Write,
     path::PathBuf,
 };
@@ -22,17 +23,30 @@ use crate::{
     shared::*,
 };
 
-#[derive(serde::Serialize, serde::Deserialize, Default, PartialEq, Eq)]
+#[derive(
+    serde::Serialize, serde::Deserialize, Default, PartialEq, Eq, PartialOrd, Ord, Copy, Clone,
+)]
 pub enum BumpKind {
-    #[serde(rename = "major")]
-    Major,
-    #[serde(rename = "minor")]
-    Minor,
-    #[serde(rename = "patch")]
-    Patch,
     #[default]
     #[serde(rename = "none")]
     None,
+    #[serde(rename = "patch")]
+    Patch,
+    #[serde(rename = "minor")]
+    Minor,
+    #[serde(rename = "major")]
+    Major,
+}
+
+impl Display for BumpKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BumpKind::None => f.write_str("None"),
+            BumpKind::Major => f.write_str("Major"),
+            BumpKind::Minor => f.write_str("Minor"),
+            BumpKind::Patch => f.write_str("Patch"),
+        }
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]

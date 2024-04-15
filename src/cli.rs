@@ -16,6 +16,8 @@ pub enum Command {
     Status(Status),
     /// Claim ownership of unpublished crates on crates.io
     Claim(Claim),
+    /// Find crates marked as changed in prdoc
+    Prdoc(Prdoc),
     /// Find what crates have changed since last crates.io release
     Changed(Changed),
     /// Plan a publish
@@ -58,6 +60,23 @@ pub struct Claim {
 }
 
 #[derive(Parser, Debug)]
+pub struct Prdoc {
+    /// Don't include packages that have has a dependency change
+    #[arg(long, short = 'd')]
+    pub no_deps: bool,
+    /// Just print paths, pass twice to print manifests
+    #[arg(long, short, action = ArgAction::Count)]
+    pub paths: u8,
+    /// Only print crate names
+    #[arg(long, short)]
+    pub quiet: bool,
+    /// Path to the cargo workspace
+    pub path: PathBuf,
+    /// Path to prdoc dir
+    pub prdoc_path: PathBuf,
+}
+
+#[derive(Parser, Debug)]
 pub struct Changed {
     /// Just print paths, pass twice to print manifests
     #[arg(long, short, action = ArgAction::Count)]
@@ -96,6 +115,9 @@ pub struct Plan {
     /// Publish crates that have changed since git ref
     #[arg(long)]
     pub since: Option<String>,
+    #[arg(long)]
+    /// Calculate changes from prdocs
+    pub prdoc: Option<PathBuf>,
     /// don't verify before publishing
     #[arg(long)]
     pub no_verify: bool,

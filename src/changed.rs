@@ -6,6 +6,7 @@ use std::process::Command;
 use std::str::FromStr;
 
 use crate::cli::Changed;
+use crate::plan::BumpKind;
 use anyhow::{bail, Result};
 use cargo::core::dependency::DepKind;
 use cargo::core::Workspace;
@@ -17,6 +18,7 @@ pub struct Change {
     pub name: String,
     pub path: PathBuf,
     pub kind: ChangeKind,
+    pub bump: BumpKind,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -70,7 +72,7 @@ pub async fn handle_changed(diff: Changed) -> Result<()> {
     Ok(())
 }
 
-fn find_indirect_changes(w: &Workspace, changed: &mut Vec<Change>) {
+pub fn find_indirect_changes(w: &Workspace, changed: &mut Vec<Change>) {
     let mut dependants = HashSet::new();
 
     for c in w.members() {
@@ -81,6 +83,7 @@ fn find_indirect_changes(w: &Workspace, changed: &mut Vec<Change>) {
         {
             if changed
                 .iter()
+                .filter(|ch| ch.bump == BumpKind::Major)
                 .any(|ch| ch.name == dep.package_name().as_str())
             {
                 dependants.insert(c.name().as_str());
@@ -109,7 +112,9 @@ fn find_indirect_changes(w: &Workspace, changed: &mut Vec<Change>) {
     }
 
     for c in dependants {
-        if !changed.iter().any(|ch| ch.name == c) {
+        if let Some(change) = changed.iter_mut().find(|ch| ch.name == c) {
+            change.bump = BumpKind::Major;
+        } else {
             let path = w
                 .members()
                 .find(|cr| cr.name().as_str() == c)
@@ -121,6 +126,7 @@ fn find_indirect_changes(w: &Workspace, changed: &mut Vec<Change>) {
                 name: c.to_string(),
                 path: path.to_path_buf(),
                 kind: ChangeKind::Dependency,
+                bump: BumpKind::Major,
             };
             changed.push(change);
         }
@@ -150,6 +156,7 @@ pub fn get_changed_crates(w: &Workspace, deps: bool, from: &str, to: &str) -> Re
                     name: c.name().to_string(),
                     path: path.to_path_buf(),
                     kind: ChangeKind::Manifest,
+                    bump: BumpKind::Major,
                 };
                 changed.push(change);
             }
@@ -158,6 +165,7 @@ pub fn get_changed_crates(w: &Workspace, deps: bool, from: &str, to: &str) -> Re
                 name: c.name().to_string(),
                 path: path.to_path_buf(),
                 kind: ChangeKind::Files,
+                bump: BumpKind::Major,
             };
             changed.push(change);
         }

@@ -30,6 +30,8 @@ pub enum Command {
     Check(Check),
     /// Manage Plan.config
     Config(Config),
+    /// Query a workspace
+    Workspace(Workspace),
 }
 
 #[derive(Parser, Debug)]
@@ -59,6 +61,21 @@ pub struct Claim {
     #[arg(default_value = ".")]
     /// Path to the cargo workspace
     pub path: PathBuf,
+}
+
+#[derive(Parser, Debug)]
+pub struct Workspace {
+    /// Only print crate names
+    #[arg(long, short)]
+    pub quiet: bool,
+    /// Print packages that own given files
+    #[arg(long, short)]
+    pub owns: bool,
+    /// Path to the cargo workspace
+    pub path: PathBuf,
+    /// targets to act on
+    #[arg(default_values_t = Vec::<String>::new())]
+    pub targets: Vec<String>,
 }
 
 #[derive(Parser, Debug)]

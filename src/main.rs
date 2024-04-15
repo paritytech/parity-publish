@@ -14,6 +14,7 @@ mod public_api;
 mod registry;
 mod shared;
 mod status;
+mod workspace;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -29,5 +30,6 @@ async fn main() -> Result<()> {
         cli::Command::Apply(apply) => apply::handle_apply(apply).await,
         cli::Command::Check(check) => check::handle_check(check).await,
         cli::Command::Config(config) => config::handle_config(config),
+        cli::Command::Workspace(workspace) => workspace::handle_workspace(workspace),
     }
 }

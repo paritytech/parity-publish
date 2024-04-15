@@ -24,36 +24,21 @@ struct Crates {
 }
 
 pub fn get_prdocs(workspace: &Workspace, path: &Path, deps: bool) -> Result<Vec<Change>> {
-    let dirs = read_dir(path).context("failed to read prdoc dir")?;
     let mut entries = HashMap::new();
 
-    for dir in dirs {
-        let dir = dir.context("failed to read prdoc dir")?;
+    if path.is_file() {
+        read_prdoc(path, workspace, &mut entries)?;
+    } else {
+        let dirs = read_dir(path).context("failed to read prdoc dir")?;
 
-        if dir.path().extension().unwrap_or_default() != "prdoc" {
-            continue;
-        }
+        for dir in dirs {
+            let dir = dir.context("failed to read prdoc dir")?;
 
-        let prdoc = read_to_string(dir.path()).context("failed to read prdo")?;
-        let prdoc: Document = serde_yaml::from_str(&prdoc)?;
-        for c in prdoc.crates {
-            let Some(path) = workspace.members().find(|m| m.name().as_str() == c.name) else {
+            if dir.path().extension().unwrap_or_default() != "prdoc" {
                 continue;
-            };
-            let path = path.root().strip_prefix(workspace.root()).unwrap();
-            let kind = ChangeKind::Files;
-            let bump = match c.bump.as_str() {
-                "patch" => BumpKind::Patch,
-                "minor" => BumpKind::Minor,
-                _ => BumpKind::Major,
-            };
-            let entry = entries.entry(c.name.to_string()).or_insert(Change {
-                name: c.name.into(),
-                path: path.into(),
-                kind,
-                bump,
-            });
-            entry.bump = entry.bump.max(bump);
+            }
+
+            read_prdoc(&dir.path(), workspace, &mut entries)?;
         }
     }
 
@@ -63,6 +48,34 @@ pub fn get_prdocs(workspace: &Workspace, path: &Path, deps: bool) -> Result<Vec<
         find_indirect_changes(workspace, &mut entries);
     }
     Ok(entries)
+}
+
+fn read_prdoc(
+    path: &Path,
+    workspace: &Workspace<'_>,
+    entries: &mut HashMap<String, Change>,
+) -> Result<(), anyhow::Error> {
+    let prdoc = read_to_string(path).context("failed to read prdo")?;
+    let prdoc: Document = serde_yaml::from_str(&prdoc)?;
+    Ok(for c in prdoc.crates {
+        let Some(path) = workspace.members().find(|m| m.name().as_str() == c.name) else {
+            continue;
+        };
+        let path = path.root().strip_prefix(workspace.root()).unwrap();
+        let kind = ChangeKind::Files;
+        let bump = match c.bump.as_str() {
+            "patch" => BumpKind::Patch,
+            "minor" => BumpKind::Minor,
+            _ => BumpKind::Major,
+        };
+        let entry = entries.entry(c.name.to_string()).or_insert(Change {
+            name: c.name.into(),
+            path: path.into(),
+            kind,
+            bump,
+        });
+        entry.bump = entry.bump.max(bump);
+    })
 }
 
 pub fn handle_prdoc(prdoc: Prdoc) -> Result<()> {

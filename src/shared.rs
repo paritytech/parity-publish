@@ -1,4 +1,9 @@
-use std::{env, sync::Arc, time::Duration};
+use std::{
+    env,
+    io::{stdin, BufRead},
+    sync::Arc,
+    time::Duration,
+};
 
 use anyhow::Result;
 use cargo::core::Workspace;
@@ -12,6 +17,18 @@ pub enum Owner {
     Us,
     None,
     Other,
+}
+
+pub fn read_stdin(args: &mut Vec<String>) -> Result<()> {
+    if let Some(n) = args.iter().position(|a| a == "-") {
+        let stdin = stdin().lock();
+
+        let lines = stdin.lines().collect::<std::result::Result<Vec<_>, _>>()?;
+        let rest = args.split_off(n);
+        args.extend(lines);
+        args.extend(rest.into_iter().skip(1));
+    }
+    Ok(())
 }
 
 pub fn parity_crate_owner_id() -> u64 {

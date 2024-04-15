@@ -11,7 +11,7 @@ use std::{collections::HashSet, path::PathBuf};
 use termcolor::{Color, WriteColor};
 use termcolor::{ColorChoice, ColorSpec, StandardStream};
 
-use crate::{cli::Semver, plan::BumpKind, registry};
+use crate::{cli::Semver, plan::BumpKind, registry, shared::read_stdin};
 
 struct Change {
     name: String,
@@ -20,7 +20,8 @@ struct Change {
     diff: PublicApiDiff,
 }
 
-pub fn handle_public_api(breaking: Semver) -> Result<()> {
+pub fn handle_public_api(mut breaking: Semver) -> Result<()> {
+    read_stdin(&mut breaking.crates)?;
     let mut stdout = StandardStream::stdout(ColorChoice::Auto);
     let mut stderr = StandardStream::stderr(ColorChoice::Auto);
     let mut changes = Vec::new();

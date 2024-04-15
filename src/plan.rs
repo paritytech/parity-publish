@@ -136,7 +136,8 @@ pub struct RemoveCrate {
     pub name: String,
 }
 
-pub async fn handle_plan(plan: Plan) -> Result<()> {
+pub async fn handle_plan(mut plan: Plan) -> Result<()> {
+    read_stdin(&mut plan.crates)?;
     if plan.patch {
         patch_bump(&plan)
     } else {

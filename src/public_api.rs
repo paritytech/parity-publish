@@ -5,7 +5,7 @@ use cargo::{
     util::cache_lock::CacheLockMode,
     util_semver::VersionExt,
 };
-use public_api::diff::PublicApiDiff;
+use public_api::{diff::PublicApiDiff, PublicItem};
 use std::io::Write;
 use std::{collections::HashSet, path::PathBuf};
 use termcolor::{Color, WriteColor};
@@ -180,18 +180,18 @@ pub fn handle_public_api(mut breaking: Semver) -> Result<()> {
                 if c.bump == BumpKind::Major {
                     for change in &c.diff.removed {
                         stdout.set_color(ColorSpec::new().set_fg(Some(Color::Red)))?;
-                        writeln!(stdout, "   -{}", change)?;
+                        writeln!(stdout, "   -{}", split_change(&change))?;
                     }
                     for change in &c.diff.changed {
                         stdout.set_color(ColorSpec::new().set_fg(Some(Color::Red)))?;
-                        writeln!(stdout, "   -{}", change.old)?;
+                        writeln!(stdout, "   -{}", split_change(&change.old))?;
                         stdout.set_color(ColorSpec::new().set_fg(Some(Color::Green)))?;
-                        writeln!(stdout, "   +{}", change.new)?;
+                        writeln!(stdout, "   +{}", split_change(&change.new))?;
                     }
                 } else {
                     for change in &c.diff.added {
                         stdout.set_color(ColorSpec::new().set_fg(Some(Color::Green)))?;
-                        writeln!(stdout, "   +{}", change)?;
+                        writeln!(stdout, "   +{}", split_change(&change))?;
                     }
                 }
             }
@@ -201,4 +201,16 @@ pub fn handle_public_api(mut breaking: Semver) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn split_change(s: &PublicItem) -> String {
+    let mut ret = String::new();
+
+    for (n, c) in s.to_string().chars().enumerate() {
+        if (n + 1) % 120 == 0 {
+            ret.push_str("\n    ");
+        }
+        ret.push(c);
+    }
+    ret
 }

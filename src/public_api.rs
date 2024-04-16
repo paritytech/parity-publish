@@ -99,7 +99,8 @@ pub fn handle_public_api(mut breaking: Semver) -> Result<()> {
     let total = workspace
         .members()
         .filter(|c| upstreams.iter().any(|u| c.name() == u.name()))
-        .count();
+        .count()
+        * 2;
 
     for c in workspace.members() {
         let Some(upstream) = upstreams.iter().find(|u| c.name() == u.name()) else {
@@ -107,15 +108,13 @@ pub fn handle_public_api(mut breaking: Semver) -> Result<()> {
         };
 
         n += 1;
-
         writeln!(
             stdout,
-            "({:3<}/{:3<}) building {}-{} + {}-HEAD...",
+            "({:3<}/{:3<}) building {}-{}...",
             n,
             total,
             c.name(),
             c.version(),
-            c.name(),
         )?;
 
         let json_path = rustdoc_json::Builder::default()
@@ -126,6 +125,15 @@ pub fn handle_public_api(mut breaking: Semver) -> Result<()> {
             .build()?;
 
         let new = public_api::Builder::from_rustdoc_json(json_path).build()?;
+
+        n += 1;
+        writeln!(
+            stdout,
+            "({:3<}/{:3<}) building {}-HEAD...",
+            n,
+            total,
+            c.name(),
+        )?;
 
         let json_path = rustdoc_json::Builder::default()
             .toolchain("nightly")

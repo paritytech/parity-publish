@@ -68,10 +68,13 @@ fn read_prdoc(
     let prdoc = read_to_string(path).context("failed to read prdo")?;
     let prdoc: Document = serde_yaml::from_str(&prdoc)?;
     Ok(for c in prdoc.crates {
-        let Some(path) = workspace.members().find(|m| m.name().as_str() == c.name) else {
+        let Some(package) = workspace.members().find(|m| m.name().as_str() == c.name) else {
             continue;
         };
-        let path = path.root().strip_prefix(workspace.root()).unwrap();
+        if package.publish().is_some() {
+            continue;
+        }
+        let path = package.root().strip_prefix(workspace.root()).unwrap();
         let kind = ChangeKind::Files;
         let bump = match c.bump.as_str() {
             "patch" => BumpKind::Patch,

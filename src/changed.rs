@@ -139,6 +139,10 @@ pub fn get_changed_crates(w: &Workspace, deps: bool, from: &str, to: &str) -> Re
     let config = w.config();
 
     for c in w.members() {
+        if c.publish().is_some() {
+            continue;
+        }
+
         let path = c.root().strip_prefix(w.root()).unwrap();
         let mut src = cargo::sources::PathSource::new(c.root(), c.package_id().source_id(), config);
         src.update().unwrap();

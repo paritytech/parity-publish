@@ -95,10 +95,28 @@ pub fn handle_public_api(mut breaking: Semver) -> Result<()> {
     drop(_lock);
     writeln!(stderr, "building crates...",)?;
 
+    let mut n = 0;
+    let total = workspace
+        .members()
+        .filter(|c| upstreams.iter().any(|u| c.name() == u.name()))
+        .count();
+
     for c in workspace.members() {
         let Some(upstream) = upstreams.iter().find(|u| c.name() == u.name()) else {
             continue;
         };
+
+        n += 1;
+
+        writeln!(
+            stdout,
+            "({:3<}/{:3<}) building {}-{} + {}-HEAD...",
+            n,
+            total,
+            c.name(),
+            c.version(),
+            c.name(),
+        )?;
 
         let json_path = rustdoc_json::Builder::default()
             .toolchain("nightly")

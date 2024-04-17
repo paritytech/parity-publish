@@ -86,6 +86,9 @@ pub struct Semver {
     /// Verbose output
     #[arg(long, short)]
     pub verbose: bool,
+    /// Old version to compare against
+    #[arg(long)]
+    pub since: Option<String>,
     /// Crates to check
     #[arg(default_values_t = Vec::<String>::new())]
     pub crates: Vec<String>,

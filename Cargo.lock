@@ -3290,6 +3290,7 @@ dependencies = [
  "semver",
  "serde",
  "serde_yaml",
+ "tempfile",
  "termcolor",
  "tokio",
  "toml 0.8.12",

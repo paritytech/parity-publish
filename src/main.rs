@@ -1,4 +1,6 @@
-use anyhow::Result;
+use std::env::set_current_dir;
+
+use anyhow::{Context, Result};
 use clap::Parser;
 
 mod apply;
@@ -19,6 +21,10 @@ mod workspace;
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = cli::Args::parse();
+
+    if let Some(path) = &cli.chdir {
+        set_current_dir(path).with_context(|| format!("cd {}", path.display()))?;
+    }
 
     match cli.comamnd {
         cli::Command::Status(status) => status::handle_status(status).await,

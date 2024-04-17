@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::env::current_dir;
 use std::fs::{read_dir, read_to_string};
 use std::io::Write;
 use std::path::Path;
@@ -96,7 +97,7 @@ pub fn handle_prdoc(mut prdoc: Prdoc) -> Result<()> {
     let mut stdout = StandardStream::stdout(ColorChoice::Auto);
     let config = cargo::Config::default()?;
     config.shell().set_verbosity(cargo::core::Verbosity::Quiet);
-    let path = prdoc.path.canonicalize()?.join("Cargo.toml");
+    let path = current_dir()?.join("Cargo.toml");
     let workspace = Workspace::new(&path, &config)?;
     let deps = !prdoc.no_deps;
 

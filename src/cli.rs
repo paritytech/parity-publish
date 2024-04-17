@@ -6,6 +6,8 @@ use clap::{ArgAction, Parser};
 #[derive(Parser, Debug)]
 #[command(author, version, about)]
 pub struct Args {
+    #[arg(long, short = 'C')]
+    pub chdir: Option<PathBuf>,
     #[command(subcommand)]
     pub comamnd: Command,
 }
@@ -48,9 +50,6 @@ pub struct Status {
     #[arg(long, short)]
     /// Only print crate names
     pub quiet: bool,
-    #[arg(default_value = ".")]
-    /// Path to the cargo workspace
-    pub path: PathBuf,
 }
 
 #[derive(Parser, Debug)]
@@ -58,9 +57,6 @@ pub struct Claim {
     /// Don't actually claim crates
     #[arg(long, short)]
     pub dry_run: bool,
-    #[arg(default_value = ".")]
-    /// Path to the cargo workspace
-    pub path: PathBuf,
 }
 
 #[derive(Parser, Debug)]
@@ -71,8 +67,6 @@ pub struct Workspace {
     /// Print packages that own given files
     #[arg(long, short)]
     pub owns: bool,
-    /// Path to the cargo workspace
-    pub path: PathBuf,
     /// targets to act on
     #[arg(default_values_t = Vec::<String>::new())]
     pub targets: Vec<String>,
@@ -92,8 +86,6 @@ pub struct Semver {
     /// Verbose output
     #[arg(long, short)]
     pub verbose: bool,
-    /// Path to the cargo workspace
-    pub path: PathBuf,
     /// Crates to check
     #[arg(default_values_t = Vec::<String>::new())]
     pub crates: Vec<String>,
@@ -113,8 +105,6 @@ pub struct Prdoc {
     /// Only print crate names
     #[arg(long, short)]
     pub quiet: bool,
-    /// Path to the cargo workspace
-    pub path: PathBuf,
     /// Path to prdoc dir
     pub prdoc_path: PathBuf,
     /// Limit output to specified crates
@@ -139,8 +129,6 @@ pub struct Changed {
     /// Only show packages where the manifest changed
     #[arg(long, short)]
     pub manifests: bool,
-    /// Path to the cargo workspace
-    pub path: PathBuf,
     /// The git commit to look for changes from
     pub from: String,
     /// The git commit to look for changes to
@@ -180,9 +168,6 @@ pub struct Plan {
     /// Don't bump versions when generating plan
     #[arg(long)]
     pub hold_version: bool,
-    #[arg(default_value = ".")]
-    /// Path to the cargo workspace
-    pub path: PathBuf,
     pub crates: Vec<String>,
 }
 
@@ -200,16 +185,10 @@ pub struct Apply {
     /// Don't verify packages before publish
     #[arg(long)]
     pub no_verify: bool,
-    #[arg(default_value = ".")]
-    /// Path to the cargo workspace
-    pub path: PathBuf,
 }
 
 #[derive(Parser, Debug)]
 pub struct Check {
-    #[arg(default_value = ".")]
-    /// Path to the cargo workspace
-    pub path: PathBuf,
     /// Dont exit 1 on errors that don't prevent publish
     #[arg(long)]
     pub allow_nonfatal: bool,
@@ -232,9 +211,6 @@ pub struct Check {
 
 #[derive(Parser, Debug)]
 pub struct Config {
-    #[arg(default_value = ".")]
-    /// Path to the cargo workspace
-    pub path: PathBuf,
     #[arg(long)]
     /// Apply changes specified in Plan.config
     pub apply: bool,

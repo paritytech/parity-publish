@@ -5,6 +5,7 @@ use crate::{
 
 use std::{
     collections::{BTreeMap, BTreeSet},
+    env::current_dir,
     io::Write,
     path::PathBuf,
     process::exit,
@@ -141,14 +142,14 @@ pub async fn check(check: Check) -> Result<i32> {
 }
 
 async fn issues(check: &Check) -> Result<Vec<Issues>> {
-    let path = check.path.canonicalize()?;
     let mut all_issues = Vec::new();
 
     let mut stderr = StandardStream::stderr(ColorChoice::Auto);
 
+    let path = current_dir()?.join("Cargo.toml");
     let config = cargo::Config::default()?;
     config.shell().set_verbosity(cargo::core::Verbosity::Quiet);
-    let workspace = Workspace::new(&path.join("Cargo.toml"), &config)?;
+    let workspace = Workspace::new(&path, &config)?;
 
     writeln!(stderr, "looking up crate data, this may take a while....")?;
 

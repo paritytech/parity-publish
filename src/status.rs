@@ -3,6 +3,7 @@ use crate::shared::{self, parity_crate_owner_id};
 
 use anyhow::Result;
 use cargo::core::Workspace;
+use std::env::current_dir;
 use std::io::Write;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
@@ -18,7 +19,7 @@ fn color_ok_red(stdout: &mut impl WriteColor, ok: bool, color: Color) -> Result<
 
 pub async fn handle_status(status: Status) -> Result<()> {
     let config = cargo::Config::default()?;
-    let path = status.path.canonicalize()?.join("Cargo.toml");
+    let path = current_dir()?.join("Cargo.toml");
     let workspace = Workspace::new(&path, &config)?;
     let members = workspace.members();
 

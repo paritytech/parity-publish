@@ -1,4 +1,4 @@
-use std::{fs::read_to_string, path::Path};
+use std::{env::current_dir, fs::read_to_string, path::Path};
 
 use anyhow::{Context, Result};
 use cargo::{core::Workspace, util::toml_mut::manifest::LocalManifest};
@@ -33,7 +33,7 @@ pub struct Config {
 }
 
 pub fn handle_config(cli: cli::Config) -> Result<()> {
-    let path = cli.path.canonicalize()?;
+    let path = current_dir()?;
     let config = read_config(&path)?;
 
     let cargo_config = cargo::Config::default()?;

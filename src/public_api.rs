@@ -7,7 +7,7 @@ use cargo::{
 };
 use public_api::{diff::PublicApiDiff, PublicItem};
 use std::io::Write;
-use std::{collections::HashSet, path::PathBuf};
+use std::{collections::HashSet, env::current_dir, path::PathBuf};
 use termcolor::{Color, WriteColor};
 use termcolor::{ColorChoice, ColorSpec, StandardStream};
 
@@ -27,7 +27,7 @@ pub fn handle_public_api(mut breaking: Semver) -> Result<()> {
     let mut changes = Vec::new();
     let config = cargo::Config::default()?;
     config.shell().set_verbosity(cargo::core::Verbosity::Quiet);
-    let path = breaking.path.canonicalize()?.join("Cargo.toml");
+    let path = current_dir()?.join("Cargo.toml");
     let workspace = Workspace::new(&path, &config)?;
 
     let _lock = workspace

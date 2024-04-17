@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::env::current_dir;
 use std::fmt::Display;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -42,7 +43,7 @@ pub async fn handle_changed(diff: Changed) -> Result<()> {
     let mut stdout = StandardStream::stdout(ColorChoice::Auto);
     let config = cargo::Config::default()?;
     config.shell().set_verbosity(cargo::core::Verbosity::Quiet);
-    let path = diff.path.canonicalize()?.join("Cargo.toml");
+    let path = current_dir()?.join("Cargo.toml");
     let workspace = Workspace::new(&path, &config)?;
     let deps = !diff.no_deps && !diff.manifests;
 

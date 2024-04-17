@@ -1,4 +1,4 @@
-use std::env::temp_dir;
+use std::env::{current_dir, temp_dir};
 use std::fs::{create_dir, remove_dir_all};
 use std::io::Write;
 use std::path::PathBuf;
@@ -20,7 +20,7 @@ pub async fn handle_claim(claim: Claim) -> Result<()> {
     let mut ret = 0;
     let config = cargo::Config::default()?;
     config.shell().set_verbosity(cargo::core::Verbosity::Quiet);
-    let path = claim.path.canonicalize()?.join("Cargo.toml");
+    let path = current_dir()?.join("Cargo.toml");
     let workspace = Workspace::new(&path, &config)?;
     let token = if claim.dry_run {
         String::new()

@@ -1,9 +1,9 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
-    env::args,
+    env::{args, current_dir},
     fmt::Display,
     io::Write,
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 use anyhow::{bail, Context, Result};
@@ -152,8 +152,8 @@ pub fn patch_bump(plan: &Plan) -> Result<()> {
 
     let config = cargo::Config::default()?;
     config.shell().set_verbosity(cargo::core::Verbosity::Quiet);
-    let manifest_path = plan.path.canonicalize()?.join("Cargo.toml");
-    let workspace = Workspace::new(&manifest_path, &config)?;
+    let path = current_dir()?;
+    let workspace = Workspace::new(&path.join("Cargo.toml"), &config)?;
 
     for package in &plan.crates {
         let c = planner.crates.iter_mut().find(|c| c.name == *package);
@@ -176,7 +176,7 @@ pub fn patch_bump(plan: &Plan) -> Result<()> {
         c.reason = Some(PublishReason::Bumped);
     }
 
-    write_plan(plan, &workspace, &planner)?;
+    write_plan(&workspace, &planner)?;
 
     Ok(())
 }
@@ -186,13 +186,12 @@ pub async fn generate_plan(plan: &Plan) -> Result<()> {
 
     let config = cargo::Config::default()?;
     config.shell().set_verbosity(cargo::core::Verbosity::Quiet);
-    let manifest_path = plan.path.canonicalize()?.join("Cargo.toml");
+    let manifest_path = Path::new("Cargo.toml");
     let workspace = Workspace::new(&manifest_path, &config)?;
     let mut upstream = BTreeMap::new();
 
     if !plan.skip_check {
         check::check(Check {
-            path: plan.path.clone(),
             allow_nonfatal: true,
             allow_unpublished: false,
             no_check_owner: false,
@@ -266,7 +265,7 @@ pub async fn generate_plan(plan: &Plan) -> Result<()> {
 
     let planner = calculate_plan(&plan, order, &upstream, workspace_crates, &changed).await?;
 
-    write_plan(plan, &workspace, &planner)?;
+    write_plan(&workspace, &planner)?;
     writeln!(
         stdout,
         "plan generated {} packages {} to publish",
@@ -547,7 +546,7 @@ fn order<'a>(stdout: &mut StandardStream, workspace: &'a Workspace) -> Result<Ve
 }
 
 fn read_plan(plan: &Plan) -> Result<Option<Planner>> {
-    let path = plan.path.join("Plan.toml");
+    let path = Path::new("Plan.toml");
 
     if plan.new {
         return Ok(None);
@@ -562,7 +561,7 @@ fn read_plan(plan: &Plan) -> Result<Option<Planner>> {
     }
 }
 
-fn write_plan(plan: &Plan, workspace: &Workspace, planner: &Planner) -> Result<()> {
+fn write_plan(workspace: &Workspace, planner: &Planner) -> Result<()> {
     let mut planner: DocumentMut = toml_edit::ser::to_string_pretty(planner)?.parse()?;
 
     planner
@@ -595,7 +594,7 @@ fn write_plan(plan: &Plan, workspace: &Workspace, planner: &Planner) -> Result<(
         planner.to_string(),
     );
 
-    std::fs::write(plan.path.join("Plan.toml"), output)?;
+    std::fs::write(Path::new("Plan.toml"), output)?;
     Ok(())
 }
 

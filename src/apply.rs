@@ -9,7 +9,7 @@ use semver::Version;
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    env,
+    env::{self, current_dir},
     io::Write,
     ops::Add,
     path::Path,
@@ -26,10 +26,8 @@ use crate::{
 };
 
 pub async fn handle_apply(apply: Apply) -> Result<()> {
-    let path = apply.path.canonicalize()?;
-    env::set_current_dir(&path)?;
-
-    let plan = std::fs::read_to_string(apply.path.join("Plan.toml"))
+    let path = current_dir()?;
+    let plan = std::fs::read_to_string(path.join("Plan.toml"))
         .context("Can't find Plan.toml. Have your ran plan first?")?;
     let plan: Planner = toml::from_str(&plan)?;
 
@@ -72,7 +70,7 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
             edit::remove_dep(&workspace, &mut manifest, remove_dep)?;
         }
 
-        let rewite_deps = rewrite_deps(&apply, c, &workspace_crates)?;
+        let rewite_deps = rewrite_deps(&workspace, c, &workspace_crates)?;
         edit::rewrite_deps(&path, &plan, &mut manifest, &pkg.rewrite_dep)?;
         edit::rewrite_deps(&path, &plan, &mut manifest, &rewite_deps)?;
 
@@ -215,7 +213,7 @@ fn remove_dev_features(member: &Package) -> Vec<RemoveFeature> {
 }
 
 fn rewrite_deps(
-    apply: &Apply,
+    w: &Workspace,
     cra: &Package,
     workspace_crates: &BTreeMap<&str, &Package>,
 ) -> Result<Vec<RewriteDep>> {
@@ -232,12 +230,17 @@ fn rewrite_deps(
                         cra.name(),
                     )
                 })?;
-            let path = apply.path.canonicalize()?;
 
             rewrite.push(RewriteDep {
                 name: dep.name_in_toml().to_string(),
                 version: None,
-                path: Some(dep_crate.root().strip_prefix(path).unwrap().to_path_buf()),
+                path: Some(
+                    dep_crate
+                        .root()
+                        .strip_prefix(w.root())
+                        .unwrap()
+                        .to_path_buf(),
+                ),
             })
         }
     }

@@ -140,6 +140,18 @@ fn validate(prdoc: &Prdoc, w: &Workspace) -> Result<()> {
         bail!("--since must be specified for --validate");
     };
 
+    writeln!(stdout, "PR Doc validation is best effort")?;
+    writeln!(
+        stdout,
+        "We can only detect the minimum guaranteed semver change"
+    )?;
+    writeln!(
+        stdout,
+        "It's possible to not detect changes or for changes to be greater than detected"
+    )?;
+    writeln!(stdout, "Always reason about semver changes yourself")?;
+    writeln!(stdout)?;
+
     writeln!(stdout, "validating prdocs...")?;
     let prdocs = get_prdocs(w, &prdoc.prdoc_path, false, &prdoc.crates)?;
 

@@ -270,7 +270,7 @@ pub fn get_changes(
 }
 
 pub fn fmt_change(s: &PublicItem) -> String {
-    //let mut ret = String::new();
+    let mut ret = String::new();
 
     let s = s.to_string();
     let s = s
@@ -279,12 +279,16 @@ pub fn fmt_change(s: &PublicItem) -> String {
         .collect::<Vec<_>>()
         .join(" ");
 
-    /*for (n, c) in s.chars().enumerate() {
-        if (n + 1) % 120 == 0 {
+    s.split(' ').fold(0, |mut n, word| {
+        n += word.len() + 1;
+
+        if n >= 140 {
             ret.push_str("\n    ");
+            n = 0;
         }
-        ret.push(c);
-    }
-    ret*/
-    s
+        ret.push(' ');
+        ret.push_str(word);
+        n
+    });
+    ret
 }

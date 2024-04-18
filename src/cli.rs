@@ -108,6 +108,12 @@ pub struct Prdoc {
     /// Only print crate names
     #[arg(long, short)]
     pub quiet: bool,
+    /// Validate crate changes specified in prdocs
+    #[arg(long)]
+    pub since: Option<String>,
+    /// Validate crate changes specified in prdocs
+    #[arg(long)]
+    pub validate: bool,
     /// Path to prdoc dir
     pub prdoc_path: PathBuf,
     /// Limit output to specified crates

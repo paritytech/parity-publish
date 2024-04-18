@@ -4,13 +4,14 @@ use std::fs::{read_dir, read_to_string};
 use std::io::Write;
 use std::path::Path;
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use cargo::core::Workspace;
-use termcolor::{ColorChoice, ColorSpec, StandardStream, WriteColor};
+use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
-use crate::changed::{find_indirect_changes, Change, ChangeKind};
-use crate::cli::Prdoc;
+use crate::changed::{find_indirect_changes, get_changed_crates, Change, ChangeKind};
+use crate::cli::{Prdoc, Semver};
 use crate::plan::BumpKind;
+use crate::public_api::{self, split_change};
 use crate::shared::read_stdin;
 
 #[derive(serde::Deserialize)]
@@ -101,6 +102,10 @@ pub fn handle_prdoc(mut prdoc: Prdoc) -> Result<()> {
     let workspace = Workspace::new(&path, &config)?;
     let deps = !prdoc.no_deps;
 
+    if prdoc.validate {
+        return validate(&prdoc, &workspace);
+    }
+
     let prdocs = get_prdocs(&workspace, &prdoc.prdoc_path, deps, &prdoc.crates)?;
 
     for c in prdocs {
@@ -126,4 +131,142 @@ pub fn handle_prdoc(mut prdoc: Prdoc) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn validate(prdoc: &Prdoc, w: &Workspace) -> Result<()> {
+    let mut stdout = StandardStream::stdout(ColorChoice::Auto);
+
+    let Some(from) = &prdoc.since else {
+        bail!("--since must be specified for --validate");
+    };
+
+    writeln!(stdout, "validating prdocs...")?;
+    let prdocs = get_prdocs(w, &prdoc.prdoc_path, false, &prdoc.crates)?;
+
+    writeln!(stdout, "checking file changes...")?;
+    let changes = get_changed_crates(w, false, from, "HEAD")?;
+
+    writeln!(stdout, "checking semver changes...")?;
+    let mut crates = prdocs
+        .iter()
+        .map(|p| p.name.clone())
+        .chain(changes.iter().map(|c| c.name.clone()))
+        .collect::<Vec<_>>();
+    crates.sort();
+    crates.dedup();
+    let breaking = Semver {
+        paths: 0,
+        quiet: true,
+        major: false,
+        verbose: false,
+        since: Some(from.clone()),
+        crates,
+    };
+    let (_tmp, upstreams) = public_api::get_from_commit(&w, &breaking, from)?;
+
+    let breaking = public_api::get_changes(w, upstreams, &breaking)?;
+    let mut ok = true;
+
+    writeln!(stdout)?;
+
+    for prdoc in &prdocs {
+        let changed = changes.iter().any(|c| c.name == prdoc.name);
+        let api_change = breaking.iter().find(|c| c.name == prdoc.name);
+
+        stdout.set_color(ColorSpec::new().set_bold(true))?;
+        write!(stdout, "{}", prdoc.name)?;
+        stdout.set_color(ColorSpec::new().set_bold(false))?;
+        writeln!(stdout, " ({}):", prdoc.path.display())?;
+        writeln!(stdout, "    PR Doc says change is {}", prdoc.bump)?;
+        writeln!(
+            stdout,
+            "    Predicted semver change: {}",
+            api_change.map(|b| b.bump).unwrap_or(BumpKind::Patch)
+        )?;
+        writeln!(stdout, "    Found file change: {}", yesno(changed))?;
+
+        if let Some(api_change) = api_change {
+            if api_change.bump == BumpKind::Major && prdoc.bump != BumpKind::Major {
+                writeln!(
+                    stdout,
+                    "    Major API change found but prdoc specified {}",
+                    prdoc.bump
+                )?;
+                ok = false;
+
+                for change in &api_change.diff.removed {
+                    stdout.set_color(ColorSpec::new().set_fg(Some(Color::Red)))?;
+                    writeln!(stdout, "   -{}", split_change(&change))?;
+                }
+                for change in &api_change.diff.changed {
+                    stdout.set_color(ColorSpec::new().set_fg(Some(Color::Red)))?;
+                    writeln!(stdout, "   -{}", split_change(&change.old))?;
+                    stdout.set_color(ColorSpec::new().set_fg(Some(Color::Green)))?;
+                    writeln!(stdout, "   +{}", split_change(&change.new))?;
+                }
+            }
+            if api_change.bump == BumpKind::Minor && prdoc.bump == BumpKind::Patch {
+                // just warn don't return 1 for this
+                writeln!(
+                    stdout,
+                    "    Minor API change found but prdoc specified {}",
+                    prdoc.bump
+                )?;
+
+                for change in &api_change.diff.added {
+                    stdout.set_color(ColorSpec::new().set_fg(Some(Color::Red)))?;
+                    writeln!(stdout, "   +{}", split_change(&change))?;
+                }
+            }
+        }
+
+        writeln!(stdout)?;
+    }
+
+    for change in &changes {
+        if prdocs.iter().any(|p| p.name == change.name) {
+            continue;
+        }
+
+        stdout.set_color(ColorSpec::new().set_bold(true))?;
+        write!(stdout, "{}", change.name)?;
+        stdout.set_color(ColorSpec::new().set_bold(false))?;
+        writeln!(stdout, " ({}):", change.path.display())?;
+        match change.kind {
+            ChangeKind::Files => {
+                writeln!(stdout, "    Files changed but crate not listed in PR Doc")?
+            }
+            ChangeKind::Manifest => writeln!(
+                stdout,
+                "    Cargo.toml changed but crate not listed in PR Doc"
+            )?,
+            _ => (),
+        }
+        writeln!(
+            stdout,
+            "    Predicted Semver change: {}",
+            breaking
+                .iter()
+                .find(|b| b.name == change.name)
+                .map(|b| b.bump)
+                .unwrap_or(BumpKind::Patch)
+        )?;
+        ok = false;
+
+        writeln!(stdout)?;
+    }
+
+    if !ok {
+        std::process::exit(1);
+    }
+
+    Ok(())
+}
+
+fn yesno(b: bool) -> &'static str {
+    if b {
+        "yes"
+    } else {
+        "no"
+    }
 }

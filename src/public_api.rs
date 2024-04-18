@@ -14,11 +14,11 @@ use termcolor::{ColorChoice, ColorSpec, StandardStream};
 
 use crate::{cli::Semver, plan::BumpKind, registry, shared::read_stdin};
 
-struct Change {
-    name: String,
-    path: PathBuf,
-    bump: BumpKind,
-    diff: PublicApiDiff,
+pub struct Change {
+    pub name: String,
+    pub path: PathBuf,
+    pub bump: BumpKind,
+    pub diff: PublicApiDiff,
 }
 
 pub fn handle_public_api(mut breaking: Semver) -> Result<()> {
@@ -40,7 +40,7 @@ pub fn handle_public_api(mut breaking: Semver) -> Result<()> {
     };
     writeln!(stderr, "building crates...",)?;
 
-    let changes = get_changes(workspace, upstreams, &breaking)?;
+    let changes = get_changes(&workspace, upstreams, &breaking)?;
 
     for c in changes {
         if breaking.paths >= 2 {
@@ -82,7 +82,7 @@ pub fn handle_public_api(mut breaking: Semver) -> Result<()> {
     Ok(())
 }
 
-fn get_from_commit(
+pub fn get_from_commit(
     workspace: &Workspace,
     breaking: &Semver,
     commit: &str,
@@ -191,8 +191,8 @@ fn get_from_last_release(workspace: &Workspace<'_>, breaking: &Semver) -> Result
     Ok(upstreams)
 }
 
-fn get_changes(
-    workspace: Workspace<'_>,
+pub fn get_changes(
+    workspace: &Workspace<'_>,
     upstreams: Vec<cargo::core::Package>,
     breaking: &Semver,
 ) -> Result<Vec<Change>> {
@@ -269,7 +269,7 @@ fn get_changes(
     Ok(changes)
 }
 
-fn split_change(s: &PublicItem) -> String {
+pub fn split_change(s: &PublicItem) -> String {
     let mut ret = String::new();
 
     for (n, c) in s.to_string().chars().enumerate() {

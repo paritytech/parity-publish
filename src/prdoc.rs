@@ -11,7 +11,7 @@ use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 use crate::changed::{find_indirect_changes, get_changed_crates, Change, ChangeKind};
 use crate::cli::{Prdoc, Semver};
 use crate::plan::BumpKind;
-use crate::public_api::{self, split_change};
+use crate::public_api::{self, fmt_change};
 use crate::shared::read_stdin;
 
 #[derive(serde::Deserialize)]
@@ -196,13 +196,13 @@ fn validate(prdoc: &Prdoc, w: &Workspace) -> Result<()> {
 
                 for change in &api_change.diff.removed {
                     stdout.set_color(ColorSpec::new().set_fg(Some(Color::Red)))?;
-                    writeln!(stdout, "   -{}", split_change(&change))?;
+                    writeln!(stdout, "   -{}", fmt_change(&change))?;
                 }
                 for change in &api_change.diff.changed {
                     stdout.set_color(ColorSpec::new().set_fg(Some(Color::Red)))?;
-                    writeln!(stdout, "   -{}", split_change(&change.old))?;
+                    writeln!(stdout, "   -{}", fmt_change(&change.old))?;
                     stdout.set_color(ColorSpec::new().set_fg(Some(Color::Green)))?;
-                    writeln!(stdout, "   +{}", split_change(&change.new))?;
+                    writeln!(stdout, "   +{}", fmt_change(&change.new))?;
                 }
             }
             if api_change.bump == BumpKind::Minor && prdoc.bump == BumpKind::Patch {
@@ -215,7 +215,7 @@ fn validate(prdoc: &Prdoc, w: &Workspace) -> Result<()> {
 
                 for change in &api_change.diff.added {
                     stdout.set_color(ColorSpec::new().set_fg(Some(Color::Red)))?;
-                    writeln!(stdout, "   +{}", split_change(&change))?;
+                    writeln!(stdout, "   +{}", fmt_change(&change))?;
                 }
             }
         }

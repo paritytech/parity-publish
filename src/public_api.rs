@@ -59,18 +59,18 @@ pub fn handle_public_api(mut breaking: Semver) -> Result<()> {
                 if c.bump == BumpKind::Major {
                     for change in &c.diff.removed {
                         stdout.set_color(ColorSpec::new().set_fg(Some(Color::Red)))?;
-                        writeln!(stdout, "   -{}", split_change(&change))?;
+                        writeln!(stdout, "   -{}", fmt_change(&change))?;
                     }
                     for change in &c.diff.changed {
                         stdout.set_color(ColorSpec::new().set_fg(Some(Color::Red)))?;
-                        writeln!(stdout, "   -{}", split_change(&change.old))?;
+                        writeln!(stdout, "   -{}", fmt_change(&change.old))?;
                         stdout.set_color(ColorSpec::new().set_fg(Some(Color::Green)))?;
-                        writeln!(stdout, "   +{}", split_change(&change.new))?;
+                        writeln!(stdout, "   +{}", fmt_change(&change.new))?;
                     }
                 } else {
                     for change in &c.diff.added {
                         stdout.set_color(ColorSpec::new().set_fg(Some(Color::Green)))?;
-                        writeln!(stdout, "   +{}", split_change(&change))?;
+                        writeln!(stdout, "   +{}", fmt_change(&change))?;
                     }
                 }
             }
@@ -269,14 +269,22 @@ pub fn get_changes(
     Ok(changes)
 }
 
-pub fn split_change(s: &PublicItem) -> String {
-    let mut ret = String::new();
+pub fn fmt_change(s: &PublicItem) -> String {
+    //let mut ret = String::new();
 
-    for (n, c) in s.to_string().chars().enumerate() {
+    let s = s.to_string();
+    let s = s
+        .split(' ')
+        .map(|s| s.rsplit("::").next().unwrap())
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    /*for (n, c) in s.chars().enumerate() {
         if (n + 1) % 120 == 0 {
             ret.push_str("\n    ");
         }
         ret.push(c);
     }
-    ret
+    ret*/
+    s
 }

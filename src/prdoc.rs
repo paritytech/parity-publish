@@ -185,6 +185,10 @@ fn validate(prdoc: &Prdoc, w: &Workspace) -> Result<()> {
         let changed = changes.iter().any(|c| c.name == prdoc.name);
         let api_change = breaking.iter().find(|c| c.name == prdoc.name);
 
+        if Some(prdoc.bump) == api_change.map(|c| c.bump) && changed {
+            continue;
+        }
+
         stdout.set_color(ColorSpec::new().set_bold(true))?;
         write!(stdout, "{}", prdoc.name)?;
         stdout.set_color(ColorSpec::new().set_bold(false))?;

@@ -290,5 +290,5 @@ pub fn fmt_change(s: &PublicItem) -> String {
         ret.push_str(word);
         n
     });
-    ret
+    ret.trim().to_string()
 }

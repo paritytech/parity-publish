@@ -81,6 +81,7 @@ fn read_prdoc(
         let bump = match c.bump.as_str() {
             "patch" => BumpKind::Patch,
             "minor" => BumpKind::Minor,
+            "none" => BumpKind::None,
             _ => BumpKind::Major,
         };
         let entry = entries.entry(c.name.to_string()).or_insert(Change {
@@ -185,7 +186,16 @@ fn validate(prdoc: &Prdoc, w: &Workspace) -> Result<()> {
         let changed = changes.iter().any(|c| c.name == prdoc.name);
         let api_change = breaking.iter().find(|c| c.name == prdoc.name);
 
-        if Some(prdoc.bump) == api_change.map(|c| c.bump) && changed {
+        let predicted = api_change.map(|b| b.bump).unwrap_or_else(|| {
+            if changed {
+                BumpKind::Patch
+            } else {
+                BumpKind::None
+            }
+        });
+
+        if prdoc.bump == predicted || (prdoc.bump == BumpKind::None && predicted == BumpKind::Patch)
+        {
             continue;
         }
 
@@ -194,11 +204,7 @@ fn validate(prdoc: &Prdoc, w: &Workspace) -> Result<()> {
         stdout.set_color(ColorSpec::new().set_bold(false))?;
         writeln!(stdout, " ({}):", prdoc.path.display())?;
         writeln!(stdout, "    PR Doc says change is {}", prdoc.bump)?;
-        writeln!(
-            stdout,
-            "    Predicted semver change: {}",
-            api_change.map(|b| b.bump).unwrap_or(BumpKind::Patch)
-        )?;
+        writeln!(stdout, "    Predicted semver change: {}", predicted)?;
         writeln!(stdout, "    Found file change: {}", yesno(changed))?;
 
         if let Some(api_change) = api_change {

@@ -1,6 +1,6 @@
 [package]
 name = "parity-publish"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2021"
 description = "A tool to manage publishing Parity's crates"
 license = "Apache-2.0"

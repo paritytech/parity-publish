@@ -40,7 +40,7 @@ pub fn handle_public_api(mut breaking: Semver) -> Result<()> {
     };
     writeln!(stderr, "building crates...",)?;
 
-    let changes = get_changes(&workspace, upstreams, &breaking)?;
+    let changes = get_changes(&workspace, upstreams, &breaking, true)?;
 
     for c in changes {
         if breaking.paths >= 2 {
@@ -195,6 +195,7 @@ pub fn get_changes(
     workspace: &Workspace<'_>,
     upstreams: Vec<cargo::core::Package>,
     breaking: &Semver,
+    silent: bool,
 ) -> Result<Vec<Change>> {
     let mut changes = Vec::new();
     let mut stdout = StandardStream::stdout(ColorChoice::Auto);
@@ -222,7 +223,7 @@ pub fn get_changes(
         let json_path = rustdoc_json::Builder::default()
             .toolchain("nightly")
             .quiet(true)
-            .silent(true)
+            .silent(silent)
             .manifest_path(c.manifest_path())
             .build()?;
 
@@ -241,7 +242,7 @@ pub fn get_changes(
         let json_path = rustdoc_json::Builder::default()
             .toolchain("nightly")
             .quiet(true)
-            .silent(true)
+            .silent(silent)
             .manifest_path(upstream.manifest_path())
             .build()?;
 

@@ -177,7 +177,7 @@ fn validate(prdoc: &Prdoc, w: &Workspace) -> Result<()> {
     };
     let (_tmp, upstreams) = public_api::get_from_commit(&w, &breaking, from)?;
 
-    let breaking = public_api::get_changes(w, upstreams, &breaking)?;
+    let breaking = public_api::get_changes(w, upstreams, &breaking, !prdoc.verbose)?;
     let mut ok = true;
 
     writeln!(stdout)?;

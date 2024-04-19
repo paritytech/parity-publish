@@ -105,6 +105,9 @@ pub struct Prdoc {
     /// Only print breaking changes
     #[arg(long, short)]
     pub major: bool,
+    /// Verbose output
+    #[arg(long, short)]
+    pub verbose: bool,
     /// Only print crate names
     #[arg(long, short)]
     pub quiet: bool,

@@ -6,12 +6,12 @@ use std::path::Path;
 
 use anyhow::{bail, Context, Result};
 use cargo::core::Workspace;
-use termcolor::{Color, ColorSpec, WriteColor};
+use termcolor::{ColorSpec, WriteColor};
 
 use crate::changed::{find_indirect_changes, get_changed_crates, Change, ChangeKind};
 use crate::cli::{Args, Prdoc, Semver};
 use crate::plan::BumpKind;
-use crate::public_api::{self, fmt_change};
+use crate::public_api::{self, print_diff};
 use crate::shared::read_stdin;
 
 #[derive(serde::Deserialize)]
@@ -204,9 +204,14 @@ fn validate(args: &Args, prdoc: &Prdoc, w: &Workspace) -> Result<()> {
         write!(stdout, "{}", prdoc.name)?;
         stdout.set_color(ColorSpec::new().set_bold(false))?;
         writeln!(stdout, " ({}):", prdoc.path.display())?;
-        writeln!(stdout, "    PR Doc says change is {}", prdoc.bump)?;
-        writeln!(stdout, "    Predicted semver change: {}", predicted)?;
-        writeln!(stdout, "    Found file change: {}", yesno(changed))?;
+        write!(stdout, "    Change stated in PR Doc: ")?;
+        stdout.set_color(ColorSpec::new().set_bold(true))?;
+        writeln!(stdout, "{}", prdoc.bump)?;
+        stdout.set_color(ColorSpec::new().set_bold(false))?;
+        write!(stdout, "    Predicted semver change: ")?;
+        stdout.set_color(ColorSpec::new().set_bold(true))?;
+        writeln!(stdout, "{}", predicted)?;
+        stdout.set_color(ColorSpec::new().set_bold(false))?;
 
         if let Some(api_change) = api_change {
             if api_change.bump == BumpKind::Major && prdoc.bump != BumpKind::Major {
@@ -216,17 +221,6 @@ fn validate(args: &Args, prdoc: &Prdoc, w: &Workspace) -> Result<()> {
                     prdoc.bump
                 )?;
                 ok = false;
-
-                for change in &api_change.diff.removed {
-                    stdout.set_color(ColorSpec::new().set_fg(Some(Color::Red)))?;
-                    writeln!(stdout, "   -{}", fmt_change(&change))?;
-                }
-                for change in &api_change.diff.changed {
-                    stdout.set_color(ColorSpec::new().set_fg(Some(Color::Red)))?;
-                    writeln!(stdout, "   -{}", fmt_change(&change.old))?;
-                    stdout.set_color(ColorSpec::new().set_fg(Some(Color::Green)))?;
-                    writeln!(stdout, "   +{}", fmt_change(&change.new))?;
-                }
             }
             if api_change.bump == BumpKind::Minor && prdoc.bump == BumpKind::Patch {
                 // just warn don't return 1 for this
@@ -235,12 +229,8 @@ fn validate(args: &Args, prdoc: &Prdoc, w: &Workspace) -> Result<()> {
                     "    Minor API change found but prdoc specified {}",
                     prdoc.bump
                 )?;
-
-                for change in &api_change.diff.added {
-                    stdout.set_color(ColorSpec::new().set_fg(Some(Color::Red)))?;
-                    writeln!(stdout, "   +{}", fmt_change(&change))?;
-                }
             }
+            print_diff(args, &api_change)?;
         }
 
         writeln!(stdout)?;
@@ -265,17 +255,7 @@ fn validate(args: &Args, prdoc: &Prdoc, w: &Workspace) -> Result<()> {
             )?,
             _ => (),
         }
-        writeln!(
-            stdout,
-            "    Predicted Semver change: {}",
-            breaking
-                .iter()
-                .find(|b| b.name == change.name)
-                .map(|b| b.bump)
-                .unwrap_or(BumpKind::Patch)
-        )?;
         ok = false;
-
         writeln!(stdout)?;
     }
 
@@ -284,12 +264,4 @@ fn validate(args: &Args, prdoc: &Prdoc, w: &Workspace) -> Result<()> {
     }
 
     Ok(())
-}
-
-fn yesno(b: bool) -> &'static str {
-    if b {
-        "yes"
-    } else {
-        "no"
-    }
 }

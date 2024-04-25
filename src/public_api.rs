@@ -62,23 +62,7 @@ pub fn handle_public_api(args: Args, mut breaking: Semver) -> Result<()> {
             writeln!(stdout, " ({}):", c.path.display())?;
             writeln!(stdout, "    {}", c.bump)?;
             if breaking.verbose {
-                if c.bump == BumpKind::Major {
-                    for change in &c.diff.removed {
-                        stdout.set_color(ColorSpec::new().set_fg(Some(Color::Red)))?;
-                        writeln!(stdout, "   -{}", fmt_change(&change))?;
-                    }
-                    for change in &c.diff.changed {
-                        stdout.set_color(ColorSpec::new().set_fg(Some(Color::Red)))?;
-                        writeln!(stdout, "   -{}", fmt_change(&change.old))?;
-                        stdout.set_color(ColorSpec::new().set_fg(Some(Color::Green)))?;
-                        writeln!(stdout, "   +{}", fmt_change(&change.new))?;
-                    }
-                } else {
-                    for change in &c.diff.added {
-                        stdout.set_color(ColorSpec::new().set_fg(Some(Color::Green)))?;
-                        writeln!(stdout, "   +{}", fmt_change(&change))?;
-                    }
-                }
+                print_diff(&args, &c)?;
             }
             writeln!(stdout)?;
             stdout.set_color(&ColorSpec::new())?;
@@ -267,22 +251,23 @@ pub fn get_changes(
         let report = report.crate_reports().first_key_value().unwrap().1;
         let diff = public_api::diff::PublicApiDiff::between(old_diff, new_diff);
 
-        if let Some(bump) = report.required_bump() {
-            let bump = match bump {
-                ReleaseType::Major => BumpKind::Major,
-                ReleaseType::Minor => BumpKind::Minor,
-                ReleaseType::Patch => BumpKind::Patch,
-                _ => BumpKind::Major,
-            };
+        let bump = match report.required_bump() {
+            Some(ReleaseType::Major) => BumpKind::Major,
+            Some(ReleaseType::Minor) => BumpKind::Minor,
+            Some(ReleaseType::Patch) if !diff.added.is_empty() => BumpKind::Minor,
+            Some(ReleaseType::Patch) => BumpKind::Patch,
+            Some(_) => BumpKind::Major,
+            None if !diff.added.is_empty() => BumpKind::Minor,
+            None => BumpKind::None,
+        };
 
-            if !breaking.major || bump == BumpKind::Major {
-                changes.push(Change {
-                    name: c.name().to_string(),
-                    path: path.to_owned(),
-                    bump,
-                    diff,
-                });
-            }
+        if bump != BumpKind::None && (!breaking.major || bump == BumpKind::Major) {
+            changes.push(Change {
+                name: c.name().to_string(),
+                path: path.to_owned(),
+                bump,
+                diff,
+            });
         }
     }
 
@@ -311,4 +296,23 @@ pub fn fmt_change(s: &PublicItem) -> String {
         n
     });
     ret.trim().to_string()
+}
+
+pub fn print_diff(args: &Args, c: &Change) -> Result<()> {
+    let mut stdout = args.stdout();
+    if let Some(change) = c.diff.removed.first() {
+        stdout.set_color(ColorSpec::new().set_fg(Some(Color::Red)))?;
+        writeln!(stdout, "   -{}", fmt_change(&change))?;
+    }
+    if let Some(change) = c.diff.changed.first() {
+        stdout.set_color(ColorSpec::new().set_fg(Some(Color::Red)))?;
+        writeln!(stdout, "   -{}", fmt_change(&change.old))?;
+        stdout.set_color(ColorSpec::new().set_fg(Some(Color::Green)))?;
+        writeln!(stdout, "   +{}", fmt_change(&change.new))?;
+    }
+    if let Some(change) = c.diff.added.first() {
+        stdout.set_color(ColorSpec::new().set_fg(Some(Color::Green)))?;
+        writeln!(stdout, "   +{}", fmt_change(&change))?;
+    }
+    Ok(())
 }

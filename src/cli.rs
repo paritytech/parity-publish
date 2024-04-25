@@ -89,6 +89,9 @@ pub struct Semver {
     /// Old version to compare against
     #[arg(long)]
     pub since: Option<String>,
+    /// Rust toolchain to use
+    #[arg(long, default_value = public_api::MINIMUM_NIGHTLY_RUST_VERSION)]
+    pub toolchain: String,
     /// Crates to check
     #[arg(default_values_t = Vec::<String>::new())]
     pub crates: Vec<String>,
@@ -120,6 +123,9 @@ pub struct Prdoc {
     /// Path to prdoc dir
     pub prdoc_path: PathBuf,
     /// Limit output to specified crates
+    /// Rust toolchain to use
+    #[arg(long, default_value = public_api::MINIMUM_NIGHTLY_RUST_VERSION)]
+    pub toolchain: String,
     #[arg(default_values_t = Vec::<String>::new())]
     pub crates: Vec<String>,
 }

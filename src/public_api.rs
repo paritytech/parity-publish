@@ -222,7 +222,7 @@ pub fn get_changes(
         )?;
 
         let json_path = rustdoc_json::Builder::default()
-            .toolchain(public_api::MINIMUM_NIGHTLY_RUST_VERSION)
+            .toolchain(&breaking.toolchain)
             .quiet(true)
             .silent(silent)
             .manifest_path(c.manifest_path())
@@ -246,7 +246,7 @@ pub fn get_changes(
             .toolchain(public_api::MINIMUM_NIGHTLY_RUST_VERSION)
             .quiet(true)
             .silent(silent)
-            .manifest_path(upstream.manifest_path())
+            .manifest_path(&breaking.toolchain)
             .build()?;
 
         let path = c.root().strip_prefix(workspace.root()).unwrap();

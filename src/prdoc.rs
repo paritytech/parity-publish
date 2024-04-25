@@ -174,6 +174,7 @@ fn validate(prdoc: &Prdoc, w: &Workspace) -> Result<()> {
         verbose: false,
         since: Some(from.clone()),
         crates,
+        toolchain: prdoc.toolchain.clone(),
     };
     let (_tmp, upstreams) = public_api::get_from_commit(&w, &breaking, from)?;
 

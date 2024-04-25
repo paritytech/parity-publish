@@ -186,7 +186,8 @@ pub async fn generate_plan(plan: &Plan) -> Result<()> {
 
     let config = cargo::Config::default()?;
     config.shell().set_verbosity(cargo::core::Verbosity::Quiet);
-    let manifest_path = Path::new("Cargo.toml");
+    let path = current_dir()?;
+    let manifest_path = path.join("Cargo.toml");
     let workspace = Workspace::new(&manifest_path, &config)?;
     let mut upstream = BTreeMap::new();
 

@@ -1,5 +1,5 @@
 use crate::{
-    cli::Check,
+    cli::{Args, Check},
     shared::{cratesio, get_owners, Owner},
 };
 
@@ -122,12 +122,12 @@ impl Issues {
     }
 }
 
-pub async fn handle_check(chk: Check) -> Result<()> {
-    exit(check(chk).await?)
+pub async fn handle_check(args: Args, chk: Check) -> Result<()> {
+    exit(check(&args, chk).await?)
 }
 
-pub async fn check(check: Check) -> Result<i32> {
-    let mut stdout = StandardStream::stdout(ColorChoice::Auto);
+pub async fn check(args: &Args, check: Check) -> Result<i32> {
+    let mut stdout = args.stdout();
     let issues = issues(&check).await?;
 
     for issue in &issues {

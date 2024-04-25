@@ -7,16 +7,16 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::{env, fs, thread};
 
-use crate::cli::Claim;
+use crate::cli::{Args, Claim};
 use crate::shared::{self, get_owners, Owner};
 
 use anyhow::{Context, Result};
 use cargo::core::resolver::CliFeatures;
 use cargo::core::Workspace;
 use cargo::ops::{Packages, PublishOpts};
-use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
+use termcolor::{Color, ColorSpec, WriteColor};
 
-pub async fn handle_claim(claim: Claim) -> Result<()> {
+pub async fn handle_claim(args: Args, claim: Claim) -> Result<()> {
     let mut ret = 0;
     let config = cargo::Config::default()?;
     config.shell().set_verbosity(cargo::core::Verbosity::Quiet);
@@ -31,8 +31,8 @@ pub async fn handle_claim(claim: Claim) -> Result<()> {
 
     let cratesio = Arc::new(shared::cratesio()?);
 
-    let mut stdout = StandardStream::stdout(ColorChoice::Auto);
-    let mut stderr = StandardStream::stderr(ColorChoice::Auto);
+    let mut stdout = args.stdout();
+    let mut stderr = args.stderr();
     let mut throttle = false;
 
     writeln!(stderr, "looking up crate data, this may take a while....")?;

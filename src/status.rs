@@ -1,11 +1,11 @@
-use crate::cli::Status;
+use crate::cli::{Args, Status};
 use crate::shared::{self, parity_crate_owner_id};
 
 use anyhow::Result;
 use cargo::core::Workspace;
 use std::env::current_dir;
 use std::io::Write;
-use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
+use termcolor::{Color, ColorSpec, WriteColor};
 
 fn color_ok_red(stdout: &mut impl WriteColor, ok: bool, color: Color) -> Result<()> {
     if ok {
@@ -17,7 +17,7 @@ fn color_ok_red(stdout: &mut impl WriteColor, ok: bool, color: Color) -> Result<
     Ok(())
 }
 
-pub async fn handle_status(status: Status) -> Result<()> {
+pub async fn handle_status(args: Args, status: Status) -> Result<()> {
     let config = cargo::Config::default()?;
     let path = current_dir()?.join("Cargo.toml");
     let workspace = Workspace::new(&path, &config)?;
@@ -25,8 +25,8 @@ pub async fn handle_status(status: Status) -> Result<()> {
 
     let cratesio = shared::cratesio()?;
 
-    let mut stdout = StandardStream::stdout(ColorChoice::Auto);
-    let mut stderr = StandardStream::stderr(ColorChoice::Auto);
+    let mut stdout = args.stdout();
+    let mut stderr = args.stderr();
 
     if !status.quiet {
         stderr.set_color(ColorSpec::new().set_bold(true))?;

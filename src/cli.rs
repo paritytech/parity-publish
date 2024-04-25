@@ -1,13 +1,44 @@
-use std::path::PathBuf;
+use std::{
+    io::{stderr, stdout, IsTerminal},
+    path::PathBuf,
+};
 
 use clap::{ArgAction, Parser};
+use termcolor::{ColorChoice, StandardStream};
+
+fn color(s: &str) -> Result<ColorChoice, &'static str> {
+    match s {
+        "always" => Ok(ColorChoice::Always),
+        "never" => Ok(ColorChoice::Never),
+        "auto" if stdout().is_terminal() && stderr().is_terminal() => Ok(ColorChoice::Auto),
+        "auto" => Ok(ColorChoice::Never),
+        _ => Err("invalid value"),
+    }
+}
+
+#[derive(Parser, Debug)]
+pub struct Args {
+    #[arg(long, short = 'C')]
+    pub chdir: Option<PathBuf>,
+    #[arg(long, value_parser = color, default_value = "auto")]
+    pub color: ColorChoice,
+}
+
+impl Args {
+    pub fn stdout(&self) -> StandardStream {
+        StandardStream::stdout(self.color)
+    }
+    pub fn stderr(&self) -> StandardStream {
+        StandardStream::stdout(self.color)
+    }
+}
 
 /// A tool to help with publishing crates
 #[derive(Parser, Debug)]
 #[command(author, version, about)]
-pub struct Args {
-    #[arg(long, short = 'C')]
-    pub chdir: Option<PathBuf>,
+pub struct Cli {
+    #[command(flatten)]
+    pub args: Args,
     #[command(subcommand)]
     pub comamnd: Command,
 }

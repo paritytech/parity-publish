@@ -16,22 +16,21 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
-use termcolor::{ColorChoice, StandardStream};
 
 use crate::{
-    cli::Apply,
+    cli::{Apply, Args},
     config, edit,
     plan::{Planner, RemoveFeature, RewriteDep},
     registry,
 };
 
-pub async fn handle_apply(apply: Apply) -> Result<()> {
+pub async fn handle_apply(args: Args, apply: Apply) -> Result<()> {
     let path = current_dir()?;
     let plan = std::fs::read_to_string(path.join("Plan.toml"))
         .context("Can't find Plan.toml. Have your ran plan first?")?;
     let plan: Planner = toml::from_str(&plan)?;
 
-    let mut stdout = StandardStream::stdout(ColorChoice::Auto);
+    let mut stdout = args.stdout();
 
     let cargo_config = cargo::Config::default()?;
     cargo_config
@@ -88,17 +87,18 @@ pub async fn handle_apply(apply: Apply) -> Result<()> {
         return Ok(());
     }
 
-    publish(&apply, &cargo_config, plan, &path, token)
+    publish(&args, &apply, &cargo_config, plan, &path, token)
 }
 
 fn publish(
+    args: &Args,
     apply: &Apply,
     config: &cargo::Config,
     plan: Planner,
     path: &Path,
     token: String,
 ) -> Result<()> {
-    let mut stdout = StandardStream::stdout(ColorChoice::Auto);
+    let mut stdout = args.stdout();
     let mut n = 1;
 
     let workspace = Workspace::new(&path.join("Cargo.toml"), config)?;

@@ -4,8 +4,8 @@ use anyhow::{Context, Result};
 use cargo::{core::Workspace, util::toml_mut::manifest::LocalManifest};
 
 use crate::{
-    cli,
-    edit::{self},
+    cli::{self, Args},
+    edit,
     plan::{RemoveCrate, RemoveDep, RemoveFeature},
 };
 
@@ -32,7 +32,7 @@ pub struct Config {
     pub remove_crates: Vec<RemoveCrate>,
 }
 
-pub fn handle_config(cli: cli::Config) -> Result<()> {
+pub fn handle_config(_args: Args, cli: cli::Config) -> Result<()> {
     let path = current_dir()?;
     let config = read_config(&path)?;
 

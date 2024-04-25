@@ -6,12 +6,12 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str::FromStr;
 
-use crate::cli::Changed;
+use crate::cli::{Args, Changed};
 use crate::plan::BumpKind;
 use anyhow::{bail, Result};
 use cargo::core::dependency::DepKind;
 use cargo::core::Workspace;
-use termcolor::{ColorChoice, ColorSpec, StandardStream, WriteColor};
+use termcolor::{ColorSpec, WriteColor};
 use toml_edit::visit_mut::VisitMut;
 use toml_edit::Table;
 
@@ -39,8 +39,8 @@ impl Display for ChangeKind {
     }
 }
 
-pub async fn handle_changed(diff: Changed) -> Result<()> {
-    let mut stdout = StandardStream::stdout(ColorChoice::Auto);
+pub async fn handle_changed(args: Args, diff: Changed) -> Result<()> {
+    let mut stdout = args.stdout();
     let config = cargo::Config::default()?;
     config.shell().set_verbosity(cargo::core::Verbosity::Quiet);
     let path = current_dir()?.join("Cargo.toml");

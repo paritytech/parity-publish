@@ -1,10 +1,12 @@
-use crate::{cli, shared::read_stdin};
+use crate::{
+    cli::{self, Args},
+    shared::read_stdin,
+};
 use anyhow::Result;
 use cargo::core::Workspace;
 use std::{collections::HashSet, env::current_dir, io::Write, path::Path};
-use termcolor::{ColorChoice, StandardStream};
 
-pub fn handle_workspace(mut cli: cli::Workspace) -> Result<()> {
+pub fn handle_workspace(args: Args, mut cli: cli::Workspace) -> Result<()> {
     read_stdin(&mut cli.targets)?;
     let config = cargo::Config::default()?;
     config.shell().set_verbosity(cargo::core::Verbosity::Quiet);
@@ -12,17 +14,17 @@ pub fn handle_workspace(mut cli: cli::Workspace) -> Result<()> {
     let workspace = Workspace::new(&path, &config)?;
 
     if cli.owns {
-        owns(cli, &workspace)?;
+        owns(&args, cli, &workspace)?;
     } else {
-        members(cli, &workspace)?;
+        members(&args, cli, &workspace)?;
     }
 
     Ok(())
 }
 
-fn owns(cli: cli::Workspace, w: &Workspace) -> Result<()> {
-    let mut stdout = StandardStream::stdout(ColorChoice::Auto);
-    let mut stderr = StandardStream::stderr(ColorChoice::Auto);
+fn owns(args: &Args, cli: cli::Workspace, w: &Workspace) -> Result<()> {
+    let mut stdout = args.stdout();
+    let mut stderr = args.stderr();
     let mut seen = HashSet::new();
 
     'outer: for targ in &cli.targets {
@@ -72,9 +74,9 @@ fn owns(cli: cli::Workspace, w: &Workspace) -> Result<()> {
     Ok(())
 }
 
-fn members(cli: cli::Workspace, w: &Workspace) -> Result<()> {
-    let mut stdout = StandardStream::stdout(ColorChoice::Auto);
-    let mut stderr = StandardStream::stderr(ColorChoice::Auto);
+fn members(args: &Args, cli: cli::Workspace, w: &Workspace) -> Result<()> {
+    let mut stdout = args.stdout();
+    let mut stderr = args.stderr();
 
     for targ in &cli.targets {
         let Some(c) = w.members().find(|c| targ == c.name().as_str()) else {

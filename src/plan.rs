@@ -13,12 +13,11 @@ use cargo::{
     util::cache_lock::CacheLockMode,
 };
 use semver::{BuildMetadata, Prerelease, Version};
-use termcolor::{ColorChoice, StandardStream};
 use toml_edit::DocumentMut;
 
 use crate::{
     changed, check,
-    cli::{Check, Plan},
+    cli::{Args, Check, Plan},
     prdoc, registry,
     shared::*,
 };
@@ -136,12 +135,12 @@ pub struct RemoveCrate {
     pub name: String,
 }
 
-pub async fn handle_plan(mut plan: Plan) -> Result<()> {
+pub async fn handle_plan(args: Args, mut plan: Plan) -> Result<()> {
     read_stdin(&mut plan.crates)?;
     if plan.patch {
         patch_bump(&plan)
     } else {
-        generate_plan(&plan).await
+        generate_plan(&args, &plan).await
     }
 }
 
@@ -181,8 +180,8 @@ pub fn patch_bump(plan: &Plan) -> Result<()> {
     Ok(())
 }
 
-pub async fn generate_plan(plan: &Plan) -> Result<()> {
-    let mut stdout = StandardStream::stdout(ColorChoice::Auto);
+pub async fn generate_plan(args: &Args, plan: &Plan) -> Result<()> {
+    let mut stdout = args.stdout();
 
     let config = cargo::Config::default()?;
     config.shell().set_verbosity(cargo::core::Verbosity::Quiet);
@@ -192,14 +191,17 @@ pub async fn generate_plan(plan: &Plan) -> Result<()> {
     let mut upstream = BTreeMap::new();
 
     if !plan.skip_check {
-        check::check(Check {
-            allow_nonfatal: true,
-            allow_unpublished: false,
-            no_check_owner: false,
-            recursive: false,
-            quiet: false,
-            paths: 0,
-        })
+        check::check(
+            args,
+            Check {
+                allow_nonfatal: true,
+                allow_unpublished: false,
+                no_check_owner: false,
+                recursive: false,
+                quiet: false,
+                paths: 0,
+            },
+        )
         .await?;
     }
 
@@ -233,7 +235,7 @@ pub async fn generate_plan(plan: &Plan) -> Result<()> {
         BTreeSet::new()
     };
 
-    let order = order(&mut stdout, &workspace)?;
+    let order = order(args, &workspace)?;
 
     let _lock = workspace
         .config()
@@ -505,7 +507,8 @@ async fn rewrite_git_deps(
     Ok(rewrite)
 }
 
-fn order<'a>(stdout: &mut StandardStream, workspace: &'a Workspace) -> Result<Vec<&'a str>> {
+fn order<'a>(args: &Args, workspace: &'a Workspace) -> Result<Vec<&'a str>> {
+    let mut stdout = args.stdout();
     writeln!(stdout, "calculating order...")?;
 
     let mut deps = BTreeMap::new();

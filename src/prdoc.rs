@@ -6,10 +6,10 @@ use std::path::Path;
 
 use anyhow::{bail, Context, Result};
 use cargo::core::Workspace;
-use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
+use termcolor::{Color, ColorSpec, WriteColor};
 
 use crate::changed::{find_indirect_changes, get_changed_crates, Change, ChangeKind};
-use crate::cli::{Prdoc, Semver};
+use crate::cli::{Args, Prdoc, Semver};
 use crate::plan::BumpKind;
 use crate::public_api::{self, fmt_change};
 use crate::shared::read_stdin;
@@ -94,9 +94,9 @@ fn read_prdoc(
     })
 }
 
-pub fn handle_prdoc(mut prdoc: Prdoc) -> Result<()> {
+pub fn handle_prdoc(args: Args, mut prdoc: Prdoc) -> Result<()> {
     read_stdin(&mut prdoc.crates)?;
-    let mut stdout = StandardStream::stdout(ColorChoice::Auto);
+    let mut stdout = args.stdout();
     let config = cargo::Config::default()?;
     config.shell().set_verbosity(cargo::core::Verbosity::Quiet);
     let path = current_dir()?.join("Cargo.toml");
@@ -104,7 +104,7 @@ pub fn handle_prdoc(mut prdoc: Prdoc) -> Result<()> {
     let deps = !prdoc.no_deps;
 
     if prdoc.validate {
-        return validate(&prdoc, &workspace);
+        return validate(&args, &prdoc, &workspace);
     }
 
     let prdocs = get_prdocs(&workspace, &prdoc.prdoc_path, deps, &prdoc.crates)?;
@@ -134,8 +134,8 @@ pub fn handle_prdoc(mut prdoc: Prdoc) -> Result<()> {
     Ok(())
 }
 
-fn validate(prdoc: &Prdoc, w: &Workspace) -> Result<()> {
-    let mut stdout = StandardStream::stdout(ColorChoice::Auto);
+fn validate(args: &Args, prdoc: &Prdoc, w: &Workspace) -> Result<()> {
+    let mut stdout = args.stdout();
 
     let Some(from) = &prdoc.since else {
         bail!("--since must be specified for --validate");
@@ -178,7 +178,7 @@ fn validate(prdoc: &Prdoc, w: &Workspace) -> Result<()> {
     };
     let (_tmp, upstreams) = public_api::get_from_commit(&w, &breaking, from)?;
 
-    let breaking = public_api::get_changes(w, upstreams, &breaking, !prdoc.verbose)?;
+    let breaking = public_api::get_changes(args, w, upstreams, &breaking, !prdoc.verbose)?;
     let mut ok = true;
 
     writeln!(stdout)?;

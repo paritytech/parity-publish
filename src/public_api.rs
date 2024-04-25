@@ -10,10 +10,15 @@ use public_api::{diff::PublicApiDiff, PublicItem};
 use std::{collections::HashSet, env::current_dir, path::PathBuf};
 use std::{io::Write, process::Command};
 use tempfile::TempDir;
+use termcolor::ColorSpec;
 use termcolor::{Color, WriteColor};
-use termcolor::{ColorChoice, ColorSpec, StandardStream};
 
-use crate::{cli::Semver, plan::BumpKind, registry, shared::read_stdin};
+use crate::{
+    cli::{Args, Semver},
+    plan::BumpKind,
+    registry,
+    shared::read_stdin,
+};
 
 pub struct Change {
     pub name: String,
@@ -22,10 +27,10 @@ pub struct Change {
     pub diff: PublicApiDiff,
 }
 
-pub fn handle_public_api(mut breaking: Semver) -> Result<()> {
+pub fn handle_public_api(args: Args, mut breaking: Semver) -> Result<()> {
     read_stdin(&mut breaking.crates)?;
-    let mut stdout = StandardStream::stdout(ColorChoice::Auto);
-    let mut stderr = StandardStream::stderr(ColorChoice::Auto);
+    let mut stdout = args.stdout();
+    let mut stderr = args.stderr();
     let config = cargo::Config::default()?;
     config.shell().set_verbosity(cargo::core::Verbosity::Quiet);
     let path = current_dir()?.join("Cargo.toml");
@@ -37,11 +42,11 @@ pub fn handle_public_api(mut breaking: Semver) -> Result<()> {
         _tmp = tmp;
         upstream
     } else {
-        get_from_last_release(&workspace, &breaking)?
+        get_from_last_release(&args, &workspace, &breaking)?
     };
     writeln!(stderr, "building crates...",)?;
 
-    let changes = get_changes(&workspace, upstreams, &breaking, true)?;
+    let changes = get_changes(&args, &workspace, upstreams, &breaking, true)?;
 
     for c in changes {
         if breaking.paths >= 2 {
@@ -131,8 +136,12 @@ pub fn get_from_commit(
     Ok((dir, upstream))
 }
 
-fn get_from_last_release(workspace: &Workspace<'_>, breaking: &Semver) -> Result<Vec<Package>> {
-    let mut stderr = StandardStream::stderr(ColorChoice::Auto);
+fn get_from_last_release(
+    args: &Args,
+    workspace: &Workspace<'_>,
+    breaking: &Semver,
+) -> Result<Vec<Package>> {
+    let mut stderr = args.stderr();
 
     let _lock = workspace
         .config()
@@ -193,13 +202,14 @@ fn get_from_last_release(workspace: &Workspace<'_>, breaking: &Semver) -> Result
 }
 
 pub fn get_changes(
+    args: &Args,
     workspace: &Workspace<'_>,
     upstreams: Vec<cargo::core::Package>,
     breaking: &Semver,
     silent: bool,
 ) -> Result<Vec<Change>> {
     let mut changes = Vec::new();
-    let mut stdout = StandardStream::stdout(ColorChoice::Auto);
+    let mut stdout = args.stdout();
 
     let mut n = 0;
     let total = workspace

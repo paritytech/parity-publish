@@ -280,7 +280,11 @@ pub fn fmt_change(s: &PublicItem) -> String {
     let s = s.to_string();
     let s = s
         .split(' ')
-        .map(|s| s.rsplit("::").next().unwrap())
+        .map(|s| {
+            let mut s = s.rsplit("::").take(2).collect::<Vec<_>>();
+            s.reverse();
+            s.join("::")
+        })
         .collect::<Vec<_>>()
         .join(" ");
 

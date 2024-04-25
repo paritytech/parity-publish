@@ -5,6 +5,7 @@ use cargo::{
     util::cache_lock::CacheLockMode,
     util_semver::VersionExt,
 };
+use cargo_semver_checks::ReleaseType;
 use public_api::{diff::PublicApiDiff, PublicItem};
 use std::{collections::HashSet, env::current_dir, path::PathBuf};
 use std::{io::Write, process::Command};
@@ -221,13 +222,15 @@ pub fn get_changes(
         )?;
 
         let json_path = rustdoc_json::Builder::default()
-            .toolchain("nightly")
+            .toolchain(public_api::MINIMUM_NIGHTLY_RUST_VERSION)
             .quiet(true)
             .silent(silent)
             .manifest_path(c.manifest_path())
             .build()?;
 
-        let new = public_api::Builder::from_rustdoc_json(json_path).build()?;
+        let new = cargo_semver_checks::Rustdoc::from_path(&json_path);
+        let new_diff = public_api::Builder::from_rustdoc_json(&json_path).build()?;
+        let mut new = cargo_semver_checks::Check::new(new);
 
         n += 1;
         writeln!(
@@ -240,30 +243,36 @@ pub fn get_changes(
         )?;
 
         let json_path = rustdoc_json::Builder::default()
-            .toolchain("nightly")
+            .toolchain(public_api::MINIMUM_NIGHTLY_RUST_VERSION)
             .quiet(true)
             .silent(silent)
             .manifest_path(upstream.manifest_path())
             .build()?;
 
-        let old = public_api::Builder::from_rustdoc_json(json_path).build()?;
         let path = c.root().strip_prefix(workspace.root()).unwrap();
+        let old = cargo_semver_checks::Rustdoc::from_path(&json_path);
+        let old_diff = public_api::Builder::from_rustdoc_json(&json_path).build()?;
+        let report = new.with_baseline(old).check_release()?;
 
-        let diff = public_api::diff::PublicApiDiff::between(old, new);
-        if !diff.changed.is_empty() || !diff.removed.is_empty() {
-            changes.push(Change {
-                name: c.name().to_string(),
-                path: path.to_owned(),
-                bump: BumpKind::Major,
-                diff,
-            })
-        } else if !diff.added.is_empty() && !breaking.major {
-            changes.push(Change {
-                name: c.name().to_string(),
-                path: path.to_owned(),
-                bump: BumpKind::Minor,
-                diff,
-            })
+        let report = report.crate_reports().first_key_value().unwrap().1;
+        let diff = public_api::diff::PublicApiDiff::between(old_diff, new_diff);
+
+        if let Some(bump) = report.required_bump() {
+            let bump = match bump {
+                ReleaseType::Major => BumpKind::Major,
+                ReleaseType::Minor => BumpKind::Minor,
+                ReleaseType::Patch => BumpKind::Patch,
+                _ => BumpKind::Major,
+            };
+
+            if !breaking.major || bump == BumpKind::Major {
+                changes.push(Change {
+                    name: c.name().to_string(),
+                    path: path.to_owned(),
+                    bump,
+                    diff,
+                });
+            }
         }
     }
 

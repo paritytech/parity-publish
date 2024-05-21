@@ -2,6 +2,7 @@ use std::env::set_current_dir;
 
 use anyhow::{Context, Result};
 use clap::Parser;
+use log::debug;
 
 mod apply;
 mod changed;
@@ -26,6 +27,12 @@ async fn main() -> Result<()> {
     if let Some(path) = &args.chdir {
         set_current_dir(path).with_context(|| format!("cd {}", path.display()))?;
     }
+
+    if args.debug {
+        simple_logger::init()?;
+    }
+
+    debug!("{}-v{}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
 
     match cli.comamnd {
         cli::Command::Status(status) => status::handle_status(args, status).await,

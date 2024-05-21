@@ -22,6 +22,8 @@ pub struct Args {
     pub chdir: Option<PathBuf>,
     #[arg(long, value_parser = color, default_value = "auto")]
     pub color: ColorChoice,
+    #[arg(long)]
+    pub debug: bool,
 }
 
 impl Args {

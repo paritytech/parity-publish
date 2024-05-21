@@ -676,6 +676,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "acbf1af155f9b9ef647e42cdc158db4b64a1b61f743629225fde6f3e0be2a7c7"
 
 [[package]]
+name = "colored"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cbf2150cce219b664a8a70df7a1f933836724b503f8a413af9365b4dcc4d90b8"
+dependencies = [
+ "lazy_static",
+ "windows-sys 0.48.0",
+]
+
+[[package]]
 name = "const-oid"
 version = "0.9.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3284,12 +3294,14 @@ dependencies = [
  "clap",
  "crates_io_api",
  "futures",
+ "log",
  "public-api",
  "reqwest",
  "rustdoc-json",
  "semver",
  "serde",
  "serde_yaml",
+ "simple_logger",
  "tempfile",
  "termcolor",
  "tokio",
@@ -4098,6 +4110,18 @@ checksum = "77549399552de45a898a580c1b41d445bf730df867cc44e6c0233bbc4b8329de"
 dependencies = [
  "digest",
  "rand_core",
+]
+
+[[package]]
+name = "simple_logger"
+version = "5.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e8c5dfa5e08767553704aa0ffd9d9794d527103c736aba9854773851fd7497eb"
+dependencies = [
+ "colored",
+ "log",
+ "time",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]

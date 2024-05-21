@@ -6,6 +6,7 @@ use cargo::{
     util_semver::VersionExt,
 };
 use cargo_semver_checks::ReleaseType;
+use log::debug;
 use public_api::{diff::PublicApiDiff, PublicItem};
 use std::{collections::HashSet, env::current_dir, path::PathBuf};
 use std::{io::Write, process::Command};
@@ -79,6 +80,7 @@ pub fn get_from_commit(
 ) -> Result<(TempDir, Vec<Package>)> {
     let dir = workspace.root().parent().unwrap();
     let dir = tempfile::TempDir::with_prefix_in("parity_publish-", dir)?;
+    debug!("tempdir for local clone: {}", dir.path().display());
 
     let status = Command::new("git")
         .arg("clone")
@@ -97,6 +99,8 @@ pub fn get_from_commit(
         .arg(commit)
         .status()?;
     ensure!(status.success(), "git exited non 0");
+
+    debug!("checked out {} in local clone", commit);
 
     let mut upstream = Vec::new();
     let uworkspace = Workspace::new(&dir.path().join("Cargo.toml"), workspace.config())?;
@@ -260,6 +264,11 @@ pub fn get_changes(
             None if !diff.added.is_empty() => BumpKind::Minor,
             None => BumpKind::None,
         };
+
+        debug!("-- semver --");
+        debug!("semver: {}", c.name());
+        debug!("required bump: {:?}", report.required_bump());
+        debug!("adjusted bump: {}", bump);
 
         if bump != BumpKind::None && (!breaking.major || bump == BumpKind::Major) {
             changes.push(Change {

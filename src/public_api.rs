@@ -226,7 +226,7 @@ pub fn get_changes(
             .manifest_path(c.manifest_path())
             .build()?;
 
-        // Backup this file with it name appended as .new
+        // Backup the file to avoid overwriting it in the next `rustdoc_json::Builder` invocation:
         let _ = std::fs::copy(&json_path, json_path.with_extension("new"));
         let json_path = json_path.with_extension("new");
 
@@ -251,7 +251,7 @@ pub fn get_changes(
             .manifest_path(upstream.manifest_path())
             .build()?;
 
-        // Backup this file with it name appended as .ol
+        // Backup the file to a known-good location:
         let _ = std::fs::copy(&json_path, json_path.with_extension("old"));
         let json_path = json_path.with_extension("old");
 

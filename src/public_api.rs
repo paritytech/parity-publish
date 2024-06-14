@@ -226,6 +226,10 @@ pub fn get_changes(
             .manifest_path(c.manifest_path())
             .build()?;
 
+        // Backup the file to avoid overwriting it in the next `rustdoc_json::Builder` invocation:
+        let _ = std::fs::copy(&json_path, json_path.with_extension("new"));
+        let json_path = json_path.with_extension("new");
+
         let new = cargo_semver_checks::Rustdoc::from_path(&json_path);
         let new_diff = public_api::Builder::from_rustdoc_json(&json_path).build()?;
         let mut new = cargo_semver_checks::Check::new(new);
@@ -246,6 +250,10 @@ pub fn get_changes(
             .silent(silent)
             .manifest_path(upstream.manifest_path())
             .build()?;
+
+        // Backup the file to a known-good location:
+        let _ = std::fs::copy(&json_path, json_path.with_extension("old"));
+        let json_path = json_path.with_extension("old");
 
         let path = c.root().strip_prefix(workspace.root()).unwrap();
         let old = cargo_semver_checks::Rustdoc::from_path(&json_path);

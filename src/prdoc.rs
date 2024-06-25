@@ -172,6 +172,7 @@ fn validate(args: &Args, prdoc: &Prdoc, w: &Workspace) -> Result<()> {
         quiet: true,
         major: false,
         verbose: false,
+        minimum_nightly_rust_version: false,
         since: Some(from.clone()),
         crates,
         toolchain: prdoc.toolchain.clone(),
@@ -223,6 +224,7 @@ fn validate(args: &Args, prdoc: &Prdoc, w: &Workspace) -> Result<()> {
                 ok = false;
             }
             if api_change.bump == BumpKind::Minor && prdoc.bump == BumpKind::Patch {
+                // just warn don't return 1 for this
                 writeln!(
                     stdout,
                     "    Minor API change found but prdoc specified {}",

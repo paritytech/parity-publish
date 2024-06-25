@@ -125,6 +125,9 @@ pub struct Semver {
     /// Rust toolchain to use
     #[arg(long, default_value = public_api::MINIMUM_NIGHTLY_RUST_VERSION)]
     pub toolchain: String,
+    /// Print the minimum nightly rust version needed for semver checks
+    #[arg(long)]
+    pub minimum_nightly_rust_version: bool,
     /// Crates to check
     #[arg(default_values_t = Vec::<String>::new())]
     pub crates: Vec<String>,

@@ -7,7 +7,7 @@ use cargo::{
 };
 use cargo_semver_checks::ReleaseType;
 use log::debug;
-use public_api::{diff::PublicApiDiff, PublicItem};
+use public_api::{diff::PublicApiDiff, PublicItem, MINIMUM_NIGHTLY_RUST_VERSION};
 use std::{collections::HashSet, env::current_dir, path::PathBuf};
 use std::{io::Write, process::Command};
 use tempfile::TempDir;
@@ -29,6 +29,11 @@ pub struct Change {
 }
 
 pub fn handle_public_api(args: Args, mut breaking: Semver) -> Result<()> {
+    if breaking.minimum_nightly_rust_version {
+        println!("{}", MINIMUM_NIGHTLY_RUST_VERSION);
+        return Ok(());
+    }
+
     read_stdin(&mut breaking.crates)?;
     let mut stdout = args.stdout();
     let mut stderr = args.stderr();

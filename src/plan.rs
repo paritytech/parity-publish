@@ -246,6 +246,7 @@ pub async fn generate_plan(args: &Args, plan: &Plan) -> Result<()> {
     registry::download_crates(&mut reg, &workspace, true)?;
 
     for c in workspace.members().filter(|c| c.publish().is_none()) {
+        println!("{}", c.name());
         upstream.insert(
             c.name().to_string(),
             registry::get_crate(&mut reg, c.name()).unwrap(),

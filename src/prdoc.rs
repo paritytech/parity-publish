@@ -223,12 +223,12 @@ fn validate(args: &Args, prdoc: &Prdoc, w: &Workspace) -> Result<()> {
                 ok = false;
             }
             if api_change.bump == BumpKind::Minor && prdoc.bump == BumpKind::Patch {
-                // just warn don't return 1 for this
                 writeln!(
                     stdout,
                     "    Minor API change found but prdoc specified {}",
                     prdoc.bump
                 )?;
+                ok = false;
             }
             print_diff(args, &api_change)?;
         }

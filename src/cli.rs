@@ -164,7 +164,7 @@ pub struct Prdoc {
     pub crates: Vec<String>,
     /// The maximum bump that is allowed for any crate to happen. Only checked if `validate` is set.
     #[arg(long, value_enum)]
-    pub max_allowed_bump: Option<BumpKind>,
+    pub max_bump: Option<BumpKind>,
 }
 
 #[derive(Parser, Debug)]

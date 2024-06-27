@@ -155,11 +155,7 @@ fn validate(args: &Args, prdoc: &Prdoc, w: &Workspace) -> Result<()> {
 
     writeln!(stdout, "validating prdocs...")?;
     let prdocs = get_prdocs(w, &prdoc.prdoc_path, false, &prdoc.crates)?;
-
-    if let Some(max_allowed_bump) = prdoc.max_allowed_bump {
-        writeln!(stdout, "validating max bump level...")?;
-        validate_max_bump_level(args, max_allowed_bump, &prdocs)?;
-    }
+    let max_bump = prdoc.max_bump;
 
     writeln!(stdout, "checking file changes...")?;
     let changes = get_changed_crates(w, false, from, "HEAD")?;
@@ -218,6 +214,23 @@ fn validate(args: &Args, prdoc: &Prdoc, w: &Workspace) -> Result<()> {
         writeln!(stdout, "{}", predicted)?;
         stdout.set_color(ColorSpec::new().set_bold(false))?;
 
+        if let Some(max_bump) = max_bump {
+            if prdoc.bump > max_bump {
+                write!(
+                    stdout,
+                    "    Prdoc change exceeds allowed bump level: ",
+                )?;
+                stdout.set_color(ColorSpec::new().set_bold(true))?;
+                write!(stdout, "{}", prdoc.bump)?;
+                stdout.set_color(ColorSpec::new().set_bold(false))?;
+                write!(stdout, " > ")?;
+                stdout.set_color(ColorSpec::new().set_bold(true))?;
+                writeln!(stdout, "{}", max_bump)?;
+                stdout.set_color(ColorSpec::new().set_bold(false))?;
+                ok = false;
+            }
+        }
+
         if let Some(api_change) = api_change {
             if api_change.bump == BumpKind::Major && prdoc.bump != BumpKind::Major {
                 writeln!(
@@ -228,7 +241,6 @@ fn validate(args: &Args, prdoc: &Prdoc, w: &Workspace) -> Result<()> {
                 ok = false;
             }
             if api_change.bump == BumpKind::Minor && prdoc.bump == BumpKind::Patch {
-                // just warn don't return 1 for this
                 writeln!(
                     stdout,
                     "    Minor API change found but prdoc specified {}",
@@ -262,37 +274,6 @@ fn validate(args: &Args, prdoc: &Prdoc, w: &Workspace) -> Result<()> {
         }
         ok = false;
         writeln!(stdout)?;
-    }
-
-    if !ok {
-        std::process::exit(1);
-    }
-
-    Ok(())
-}
-
-/// Check that no change exceeds the maximum allowed bump level.
-fn validate_max_bump_level(
-    args: &Args,
-    max_allowed_bump: BumpKind,
-    changes: &[Change],
-) -> Result<()> {
-    let mut stdout = args.stdout();
-    let mut ok = true;
-
-    for change in changes {
-        if change.bump > max_allowed_bump {
-            stdout.set_color(ColorSpec::new().set_bold(true))?;
-            write!(stdout, "{}", change.name)?;
-            stdout.set_color(ColorSpec::new().set_bold(false))?;
-            writeln!(stdout, " ({}):", change.path.display())?;
-            writeln!(
-                stdout,
-                "    Change exceeds max allowed bump level: {} > {}",
-                change.bump, max_allowed_bump
-            )?;
-            ok = false;
-        }
     }
 
     if !ok {

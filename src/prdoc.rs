@@ -220,20 +220,20 @@ fn validate(args: &Args, prdoc: &Prdoc, w: &Workspace) -> Result<()> {
 
             if prdoc_bad || predicted_bad {
                 let location = if prdoc_bad && predicted_bad {
-                    "Bump specified in PR Doc and detected"
+                    "Specified and detected"
                 } else if prdoc_bad {
-                    "Bump specified in PR Doc"
+                    "Specified"
                 } else {
-                    "Detected bump"
+                    "Detected"
                 };
 
                 write!(
                     stdout,
-                    "    {} exceeds allowed bump level: ",
+                    "    {} bump exceeds allowed bump level: ",
                     location,
                 )?;
                 stdout.set_color(ColorSpec::new().set_bold(true))?;
-                write!(stdout, "{}", prdoc.bump)?;
+                write!(stdout, "{}", prdoc.bump.max(predicted))?;
                 stdout.set_color(ColorSpec::new().set_bold(false))?;
                 write!(stdout, " > ")?;
                 stdout.set_color(ColorSpec::new().set_bold(true))?;

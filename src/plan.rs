@@ -24,6 +24,7 @@ use crate::{
 
 #[derive(
     serde::Serialize, serde::Deserialize, Default, PartialEq, Eq, PartialOrd, Ord, Copy, Clone,
+    Debug, clap::ValueEnum,
 )]
 pub enum BumpKind {
     #[default]

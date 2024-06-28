@@ -155,6 +155,7 @@ fn validate(args: &Args, prdoc: &Prdoc, w: &Workspace) -> Result<()> {
 
     writeln!(stdout, "validating prdocs...")?;
     let prdocs = get_prdocs(w, &prdoc.prdoc_path, false, &prdoc.crates)?;
+    let max_bump = prdoc.max_bump;
 
     writeln!(stdout, "checking file changes...")?;
     let changes = get_changed_crates(w, false, from, "HEAD")?;
@@ -213,6 +214,35 @@ fn validate(args: &Args, prdoc: &Prdoc, w: &Workspace) -> Result<()> {
         stdout.set_color(ColorSpec::new().set_bold(true))?;
         writeln!(stdout, "{}", predicted)?;
         stdout.set_color(ColorSpec::new().set_bold(false))?;
+
+        if let Some(max_allowed_bump) = max_bump {
+            let prdoc_bad = prdoc.bump > max_allowed_bump;
+            let predicted_bad = predicted > max_allowed_bump;
+
+            if prdoc_bad || predicted_bad {
+                let location = if prdoc_bad && predicted_bad {
+                    "Specified and detected"
+                } else if prdoc_bad {
+                    "Specified"
+                } else {
+                    "Detected"
+                };
+
+                write!(
+                    stdout,
+                    "    {} bump exceeds allowed bump level: ",
+                    location,
+                )?;
+                stdout.set_color(ColorSpec::new().set_bold(true))?;
+                write!(stdout, "{}", prdoc.bump.max(predicted))?;
+                stdout.set_color(ColorSpec::new().set_bold(false))?;
+                write!(stdout, " > ")?;
+                stdout.set_color(ColorSpec::new().set_bold(true))?;
+                writeln!(stdout, "{}", max_allowed_bump)?;
+                stdout.set_color(ColorSpec::new().set_bold(false))?;
+                ok = false;
+            }
+        }
 
         if let Some(api_change) = api_change {
             if api_change.bump == BumpKind::Major && prdoc.bump != BumpKind::Major {

@@ -2,6 +2,7 @@ use std::{
     io::{stderr, stdout, IsTerminal},
     path::PathBuf,
 };
+use crate::plan::BumpKind;
 
 use clap::{ArgAction, Parser};
 use termcolor::{ColorChoice, StandardStream};
@@ -164,6 +165,9 @@ pub struct Prdoc {
     pub toolchain: String,
     #[arg(default_values_t = Vec::<String>::new())]
     pub crates: Vec<String>,
+    /// The maximum bump that is allowed for any crate to happen. Only checked if `validate` is set.
+    #[arg(long, value_enum)]
+    pub max_bump: Option<BumpKind>,
 }
 
 #[derive(Parser, Debug)]

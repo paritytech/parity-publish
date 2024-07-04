@@ -15,6 +15,7 @@ use termcolor::{ColorSpec, WriteColor};
 use toml_edit::visit_mut::VisitMut;
 use toml_edit::Table;
 
+#[derive(Debug)]
 pub struct Change {
     pub name: String,
     pub path: PathBuf,

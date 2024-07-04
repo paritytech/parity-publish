@@ -18,14 +18,23 @@ use toml_edit::DocumentMut;
 use crate::{
     changed::{self, Change},
     check,
-    cli::{Args, Check, Plan, Semver},
+    cli::{Args, Check, Plan},
     prdoc, registry,
     shared::*,
 };
 
 #[derive(
-    serde::Serialize, serde::Deserialize, Default, PartialEq, Eq, PartialOrd, Ord, Copy, Clone,
-    Debug, clap::ValueEnum,
+    serde::Serialize,
+    serde::Deserialize,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Copy,
+    Clone,
+    Debug,
+    clap::ValueEnum,
 )]
 pub enum BumpKind {
     #[default]
@@ -194,11 +203,12 @@ pub async fn handle_plan(args: Args, mut plan: Plan) -> Result<()> {
         let indirect = changed
             .iter()
             .filter(|c| matches!(c.kind, changed::ChangeKind::Dependency))
+            .filter(|c| c.bump != BumpKind::None)
             .count();
         writeln!(
             stderr,
             "{} packages changed {} indirect",
-            changed.len(),
+            changed.iter().filter(|c| c.bump != BumpKind::None).count(),
             indirect
         )?;
         apply_bump(&plan, &mut planner, &upstream, &changed)?;
@@ -282,13 +292,19 @@ pub fn apply_bump(
                 if to.major == 0 {
                     to.minor += 1;
                     to.patch = 0;
+                    if !u.iter().any(|u| {
+                        u.as_summary().version().major == 0
+                            && u.as_summary().version().minor == to.minor
+                    }) {
+                        break;
+                    }
                 } else {
                     to.major += 1;
                     to.minor = 0;
                     to.patch = 0;
-                }
-                if !u.iter().any(|u| u.as_summary().version().major == to.major) {
-                    break;
+                    if !u.iter().any(|u| u.as_summary().version().major == to.major) {
+                        break;
+                    }
                 }
             },
         }

@@ -12,7 +12,7 @@ use cargo::{
     sources::IndexSummary,
     util::cache_lock::CacheLockMode,
 };
-use semver::Version;
+use semver::{Prerelease, Version};
 use toml_edit::DocumentMut;
 
 use crate::{
@@ -184,7 +184,7 @@ pub async fn handle_plan(args: Args, mut plan: Plan) -> Result<()> {
             changed.len(),
             indirect
         )?;
-        apply_bump(&mut planner, &changed)?;
+        apply_bump(&plan, &mut planner, &changed)?;
         write_plan(&workspace, &planner)?;
         return Ok(());
     }
@@ -201,7 +201,7 @@ pub async fn handle_plan(args: Args, mut plan: Plan) -> Result<()> {
             changed.len(),
             indirect
         )?;
-        apply_bump(&mut planner, &changed)?;
+        apply_bump(&plan, &mut planner, &changed)?;
         write_plan(&workspace, &planner)?;
         return Ok(());
     }
@@ -236,7 +236,7 @@ pub async fn get_upstream(
     Ok(upstream)
 }
 
-pub fn apply_bump(planner: &mut Planner, changes: &[Change]) -> Result<()> {
+pub fn apply_bump(plan: &Plan, planner: &mut Planner, changes: &[Change]) -> Result<()> {
     for change in changes {
         let Some(c) = planner.crates.iter_mut().find(|c| c.name == change.name) else {
             continue;
@@ -276,6 +276,13 @@ pub fn apply_bump(planner: &mut Planner, changes: &[Change]) -> Result<()> {
                 }
             }
         }
+
+        if let Some(ref pre) = plan.pre {
+            to.pre = Prerelease::new(pre)?;
+        } else {
+            to.pre = Prerelease::EMPTY;
+        }
+        to.build = Default::default();
 
         c.to = to.to_string();
     }

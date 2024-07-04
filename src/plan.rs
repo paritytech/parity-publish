@@ -221,7 +221,6 @@ pub async fn get_upstream(
     writeln!(stderr, "looking up crates...",)?;
     registry::download_crates(&mut reg, workspace, true)?;
     for c in workspace.members().filter(|c| c.publish().is_none()) {
-        println!("{}", c.name());
         upstream.insert(
             c.name().to_string(),
             registry::get_crate(&mut reg, c.name()).unwrap(),

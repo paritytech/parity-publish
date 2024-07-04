@@ -18,7 +18,7 @@ use toml_edit::DocumentMut;
 use crate::{
     changed::{self, Change},
     check,
-    cli::{Args, Check, Plan},
+    cli::{Args, Check, Plan, Semver},
     prdoc, registry,
     shared::*,
 };
@@ -457,7 +457,7 @@ fn get_version(
     c: &Package,
 ) -> Result<Version> {
     let upstreamc = upstream.get(c.name().as_str());
-    let from = upstreamc
+    let mut from = upstreamc
         .and_then(|u| max_ver(u, plan.pre.is_some()))
         .map(|u| u.as_summary().version().clone())
         .unwrap_or_else(|| {
@@ -466,6 +466,10 @@ fn get_version(
             v.build = Default::default();
             v
         });
+
+    if from.major == 0 && from.minor == 0 {
+        from = Version::parse("0.1.0").unwrap();
+    }
 
     Ok(from)
 }

@@ -20,17 +20,14 @@ use std::{
 use crate::{
     cli::{Apply, Args},
     config, edit,
-    plan::{Planner, RemoveFeature, RewriteDep},
+    plan::{expand_plan, get_upstream, Planner, RemoveFeature, RewriteDep},
     registry,
 };
 
 pub async fn handle_apply(args: Args, apply: Apply) -> Result<()> {
     let path = current_dir()?;
-    let plan = std::fs::read_to_string(path.join("Plan.toml"))
-        .context("Can't find Plan.toml. Have your ran plan first?")?;
-    let plan: Planner = toml::from_str(&plan)?;
-
     let mut stdout = args.stdout();
+    let mut stderr = args.stderr();
 
     let cargo_config = cargo::Config::default()?;
     cargo_config
@@ -38,8 +35,19 @@ pub async fn handle_apply(args: Args, apply: Apply) -> Result<()> {
         .set_verbosity(cargo::core::Verbosity::Quiet);
 
     let workspace = Workspace::new(&path.join("Cargo.toml"), &cargo_config)?;
-
     let config = config::read_config(&path)?;
+
+    let workspace_crates = workspace
+        .members()
+        .map(|m| (m.name().as_str(), m))
+        .collect::<BTreeMap<_, _>>();
+
+    let upstream = get_upstream(&workspace, &mut stderr).await?;
+
+    let plan = std::fs::read_to_string(path.join("Plan.toml"))
+        .context("Can't find Plan.toml. Have your ran plan first?")?;
+    let mut plan: Planner = toml::from_str(&plan)?;
+    expand_plan(&workspace_crates, &mut plan, &upstream).await?;
 
     let token = if apply.publish {
         env::var("PARITY_PUBLISH_CRATESIO_TOKEN")

@@ -223,6 +223,9 @@ pub struct Plan {
     /// Patch bump the specified crates
     #[arg(long)]
     pub patch: bool,
+    /// Print expanded plan
+    #[arg(long)]
+    pub print_expanded: bool,
     /// Don't bump versions when generating plan
     #[arg(long)]
     pub hold_version: bool,

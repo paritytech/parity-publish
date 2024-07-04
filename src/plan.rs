@@ -184,7 +184,7 @@ pub async fn handle_plan(args: Args, mut plan: Plan) -> Result<()> {
             changed.len(),
             indirect
         )?;
-        apply_bump(&plan, &mut planner, &changed)?;
+        apply_bump(&plan, &mut planner, &upstream, &changed)?;
         write_plan(&workspace, &planner)?;
         return Ok(());
     }
@@ -201,7 +201,7 @@ pub async fn handle_plan(args: Args, mut plan: Plan) -> Result<()> {
             changed.len(),
             indirect
         )?;
-        apply_bump(&plan, &mut planner, &changed)?;
+        apply_bump(&plan, &mut planner, &upstream, &changed)?;
         write_plan(&workspace, &planner)?;
         return Ok(());
     }
@@ -236,7 +236,12 @@ pub async fn get_upstream(
     Ok(upstream)
 }
 
-pub fn apply_bump(plan: &Plan, planner: &mut Planner, changes: &[Change]) -> Result<()> {
+pub fn apply_bump(
+    plan: &Plan,
+    planner: &mut Planner,
+    upstream: &BTreeMap<String, Vec<IndexSummary>>,
+    changes: &[Change],
+) -> Result<()> {
     for change in changes {
         let Some(c) = planner.crates.iter_mut().find(|c| c.name == change.name) else {
             continue;
@@ -246,26 +251,34 @@ pub fn apply_bump(plan: &Plan, planner: &mut Planner, changes: &[Change]) -> Res
             continue;
         }
 
+        let empty = Vec::new();
         c.from = c.to.clone();
         let mut to = Version::parse(&c.from)?;
         c.to = to.to_string();
         c.bump = change.bump;
         c.reason = Some(PublishReason::Changed);
+        let u = upstream.get(c.name.as_str()).unwrap_or(&empty);
 
         match change.bump {
             BumpKind::None => (),
-            BumpKind::Patch => {
+            BumpKind::Patch => loop {
                 to.patch += 1;
-            }
-            BumpKind::Minor => {
+                if !u.iter().any(|u| u.as_summary().version() == &to) {
+                    break;
+                }
+            },
+            BumpKind::Minor => loop {
                 if to.major == 0 {
                     to.patch += 1;
                 } else {
                     to.minor += 1;
                     to.patch = 0;
                 }
-            }
-            BumpKind::Major => {
+                if !u.iter().any(|u| u.as_summary().version() == &to) {
+                    break;
+                }
+            },
+            BumpKind::Major => loop {
                 if to.major == 0 {
                     to.minor += 1;
                     to.patch = 0;
@@ -274,7 +287,10 @@ pub fn apply_bump(plan: &Plan, planner: &mut Planner, changes: &[Change]) -> Res
                     to.minor = 0;
                     to.patch = 0;
                 }
-            }
+                if !u.iter().any(|u| u.as_summary().version().major == to.major) {
+                    break;
+                }
+            },
         }
 
         if let Some(ref pre) = plan.pre {

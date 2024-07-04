@@ -208,6 +208,8 @@ pub async fn handle_plan(args: Args, mut plan: Plan) -> Result<()> {
                 .unwrap_or(true)
         });
 
+        changed.retain(|c| c.bump != BumpKind::None);
+
         let indirect = changed
             .iter()
             .filter(|c| matches!(c.kind, changed::ChangeKind::Dependency))
@@ -216,7 +218,7 @@ pub async fn handle_plan(args: Args, mut plan: Plan) -> Result<()> {
         writeln!(
             stderr,
             "{} packages changed {} indirect",
-            changed.iter().filter(|c| c.bump != BumpKind::None).count(),
+            changed.len(),
             indirect
         )?;
         apply_bump(&plan, &mut planner, &upstream, &changed)?;

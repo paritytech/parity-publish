@@ -81,7 +81,7 @@ fn read_prdoc(
         let bump = match c.bump.as_str() {
             "patch" => BumpKind::Patch,
             "minor" => BumpKind::Minor,
-            "none" => BumpKind::None,
+            "none" => continue,
             _ => BumpKind::Major,
         };
         let entry = entries.entry(c.name.to_string()).or_insert(Change {

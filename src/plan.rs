@@ -199,7 +199,15 @@ pub async fn handle_plan(args: Args, mut plan: Plan) -> Result<()> {
     }
 
     if let Some(path) = &plan.prdoc {
-        let changed = prdoc::get_prdocs(&workspace, path, true, &[])?;
+        let mut changed = prdoc::get_prdocs(&workspace, path, true, &[])?;
+
+        changed.retain(|c| {
+            workspace_crates
+                .get(c.name.as_str())
+                .map(|c| c.publish().is_none())
+                .unwrap_or(true)
+        });
+
         let indirect = changed
             .iter()
             .filter(|c| matches!(c.kind, changed::ChangeKind::Dependency))

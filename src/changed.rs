@@ -78,6 +78,10 @@ pub fn find_indirect_changes(w: &Workspace, changed: &mut Vec<Change>) {
     let mut dependants = HashSet::new();
 
     for c in w.members() {
+        if c.publish().is_some() {
+            continue;
+        }
+
         for dep in c
             .dependencies()
             .iter()
@@ -97,6 +101,10 @@ pub fn find_indirect_changes(w: &Workspace, changed: &mut Vec<Change>) {
         let mut did_something = false;
 
         for c in w.members() {
+            if c.publish().is_some() {
+                continue;
+            }
+
             for dep in c
                 .dependencies()
                 .iter()

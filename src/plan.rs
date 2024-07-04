@@ -444,7 +444,12 @@ fn get_version(
     let from = upstreamc
         .and_then(|u| max_ver(u, plan.pre.is_some()))
         .map(|u| u.as_summary().version().clone())
-        .unwrap_or_else(|| c.version().clone());
+        .unwrap_or_else(|| {
+            let mut v = c.version().clone();
+            v.pre = Default::default();
+            v.build = Default::default();
+            v
+        });
 
     Ok(from)
 }

@@ -407,7 +407,7 @@ pub async fn generate_plan(
         let from = get_version(plan, upstream, c)?;
 
         planner.crates.push(Publish {
-            publish: !c.publish().is_some(),
+            publish: true,
             name: c.name().to_string(),
             from: from.to_string(),
             to: from.to_string(),
@@ -472,6 +472,10 @@ pub async fn expand_plan(
             if !pkg.remove_dep.iter().any(|d| d.name == dep.name) {
                 pkg.remove_dep.push(dep);
             }
+        }
+
+        if let Some(c) = workspace_crates.get(pkg.name.as_str()) {
+            pkg.publish = c.publish().is_none();
         }
     }
     Ok(())

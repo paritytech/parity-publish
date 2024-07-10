@@ -420,15 +420,18 @@ pub async fn generate_plan(
         });
     }
 
+    let mut expanded = planner.clone();
+    expand_plan(workspace_crates, &mut expanded, upstream).await?;
+
     if old_plan.crates.is_empty() {
         writeln!(
             stderr,
             "plan generated {} packages -- {} to publish",
-            planner.crates.len(),
-            planner.crates.iter().filter(|c| c.publish).count()
+            expanded.crates.len(),
+            expanded.crates.iter().filter(|c| c.publish).count()
         )?;
     } else {
-        let added = planner
+        let added = expanded
             .crates
             .iter()
             .filter(|c| !old_plan.crates.iter().any(|o| o.name == c.name))
@@ -436,16 +439,16 @@ pub async fn generate_plan(
         let removed = old_plan
             .crates
             .iter()
-            .filter(|c| !planner.crates.iter().any(|o| o.name == c.name))
+            .filter(|c| !expanded.crates.iter().any(|o| o.name == c.name))
             .count();
 
         writeln!(
             stderr,
             "plan refreshed {} packages (+{} -{}) -- {} to publish",
-            planner.crates.len(),
+            expanded.crates.len(),
             added,
             removed,
-            planner.crates.iter().filter(|c| c.publish).count()
+            expanded.crates.iter().filter(|c| c.publish).count()
         )?;
     }
 

@@ -169,7 +169,7 @@ pub async fn handle_plan(args: Args, mut plan: Plan) -> Result<()> {
     write_plan(&workspace, &planner)?;
 
     if plan.print_expanded {
-        expand_plan(&workspace_crates, &mut planner, &upstream).await?;
+        expand_plan(&workspace, &workspace_crates, &mut planner, &upstream).await?;
         let output = plan_to_str(&workspace, &planner)?;
         writeln!(stdout, "{}", output)?;
         return Ok(());
@@ -421,7 +421,7 @@ pub async fn generate_plan(
     }
 
     let mut expanded = planner.clone();
-    expand_plan(workspace_crates, &mut expanded, upstream).await?;
+    expand_plan(&workspace, workspace_crates, &mut expanded, upstream).await?;
 
     if old_plan.crates.is_empty() {
         writeln!(
@@ -456,6 +456,7 @@ pub async fn generate_plan(
 }
 
 pub async fn expand_plan(
+    w: &Workspace<'_>,
     workspace_crates: &BTreeMap<&str, &Package>,
     planner: &mut Planner,
     upstream: &BTreeMap<String, Vec<IndexSummary>>,
@@ -466,6 +467,12 @@ pub async fn expand_plan(
         };
 
         for dep in rewrite_git_deps(c, &workspace_crates, upstream).await? {
+            if !pkg.rewrite_dep.iter().any(|d| d.name == dep.name) {
+                pkg.rewrite_dep.push(dep);
+            }
+        }
+
+        for dep in rewrite_deps(w, c, workspace_crates)? {
             if !pkg.rewrite_dep.iter().any(|d| d.name == dep.name) {
                 pkg.rewrite_dep.push(dep);
             }
@@ -691,4 +698,40 @@ fn max_ver(crates: &[IndexSummary], pre: bool) -> Option<&IndexSummary> {
         .iter()
         .filter(|c| pre || c.as_summary().version().pre.is_empty())
         .max_by_key(|c| c.as_summary().version())
+}
+
+fn rewrite_deps(
+    w: &Workspace,
+    cra: &Package,
+    workspace_crates: &BTreeMap<&str, &Package>,
+) -> Result<Vec<RewriteDep>> {
+    let mut rewrite = Vec::new();
+
+    for dep in cra.dependencies() {
+        if dep.source_id().is_path() {
+            let dep_crate = workspace_crates
+                .get(dep.package_name().as_str())
+                .with_context(|| {
+                    format!(
+                        "dependency '{}' in crate '{}' is not part of the workspace",
+                        dep.package_name(),
+                        cra.name(),
+                    )
+                })?;
+
+            rewrite.push(RewriteDep {
+                name: dep.name_in_toml().to_string(),
+                version: None,
+                path: Some(
+                    dep_crate
+                        .root()
+                        .strip_prefix(w.root())
+                        .unwrap()
+                        .to_path_buf(),
+                ),
+            })
+        }
+    }
+
+    Ok(rewrite)
 }

@@ -20,7 +20,7 @@ use std::{
 use crate::{
     cli::{Apply, Args},
     config, edit,
-    plan::{expand_plan, get_upstream, Planner, RemoveFeature, RewriteDep},
+    plan::{expand_plan, get_upstream, Planner, RemoveFeature},
     registry,
 };
 
@@ -47,7 +47,7 @@ pub async fn handle_apply(args: Args, apply: Apply) -> Result<()> {
     let plan = std::fs::read_to_string(path.join("Plan.toml"))
         .context("Can't find Plan.toml. Have your ran plan first?")?;
     let mut plan: Planner = toml::from_str(&plan)?;
-    expand_plan(&workspace_crates, &mut plan, &upstream).await?;
+    expand_plan(&workspace, &workspace_crates, &mut plan, &upstream).await?;
 
     let token = if apply.publish {
         env::var("PARITY_PUBLISH_CRATESIO_TOKEN")
@@ -77,9 +77,7 @@ pub async fn handle_apply(args: Args, apply: Apply) -> Result<()> {
             edit::remove_dep(&workspace, &mut manifest, remove_dep)?;
         }
 
-        let rewite_deps = rewrite_deps(&workspace, c, &workspace_crates)?;
         edit::rewrite_deps(&path, &plan, &mut manifest, &pkg.rewrite_dep)?;
-        edit::rewrite_deps(&path, &plan, &mut manifest, &rewite_deps)?;
 
         for remove_feature in &pkg.remove_feature {
             edit::remove_feature(&mut manifest, remove_feature)?;
@@ -218,40 +216,4 @@ fn remove_dev_features(member: &Package) -> Vec<RemoveFeature> {
     }
 
     remove
-}
-
-fn rewrite_deps(
-    w: &Workspace,
-    cra: &Package,
-    workspace_crates: &BTreeMap<&str, &Package>,
-) -> Result<Vec<RewriteDep>> {
-    let mut rewrite = Vec::new();
-
-    for dep in cra.dependencies() {
-        if dep.source_id().is_path() {
-            let dep_crate = workspace_crates
-                .get(dep.package_name().as_str())
-                .with_context(|| {
-                    format!(
-                        "dependency '{}' in crate '{}' is not part of the workspace",
-                        dep.package_name(),
-                        cra.name(),
-                    )
-                })?;
-
-            rewrite.push(RewriteDep {
-                name: dep.name_in_toml().to_string(),
-                version: None,
-                path: Some(
-                    dep_crate
-                        .root()
-                        .strip_prefix(w.root())
-                        .unwrap()
-                        .to_path_buf(),
-                ),
-            })
-        }
-    }
-
-    Ok(rewrite)
 }

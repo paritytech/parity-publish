@@ -12,7 +12,7 @@ use cargo::{
 
 pub fn get_registry<'a>(workspace: &Workspace<'a>) -> Result<RegistrySource<'a>> {
     let whitelist = workspace.members().map(|c| c.package_id()).collect();
-    let config = workspace.config();
+    let config = workspace.gctx();
 
     let mut reg = RegistrySource::remote(SourceId::crates_io(config)?, &whitelist, config)?;
     reg.invalidate_cache();
@@ -23,7 +23,7 @@ pub fn get_registry<'a>(workspace: &Workspace<'a>) -> Result<RegistrySource<'a>>
 pub fn get_crate(reg: &mut RegistrySource, name: InternedString) -> Result<Vec<IndexSummary>> {
     match reg.query_vec(
         &Dependency::parse(name, None, reg.source_id())?,
-        QueryKind::Fuzzy,
+        QueryKind::Alternatives,
     )? {
         Poll::Ready(c) if c.is_empty() => Err(anyhow!("not found")),
         Poll::Ready(c) => Ok(c),

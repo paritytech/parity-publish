@@ -151,7 +151,7 @@ pub struct RemoveCrate {
 pub async fn handle_plan(args: Args, mut plan: Plan) -> Result<()> {
     read_stdin(&mut plan.crates)?;
 
-    let config = cargo::Config::default()?;
+    let config = cargo::GlobalContext::default()?;
     config.shell().set_verbosity(cargo::core::Verbosity::Quiet);
     let path = current_dir()?;
     let workspace = Workspace::new(&path.join("Cargo.toml"), &config)?;
@@ -235,7 +235,7 @@ pub async fn get_upstream(
 ) -> Result<BTreeMap<String, Vec<IndexSummary>>> {
     let mut upstream = BTreeMap::new();
     let _lock = workspace
-        .config()
+        .gctx()
         .acquire_package_cache_lock(CacheLockMode::DownloadExclusive)?;
     let mut reg = registry::get_registry(workspace)?;
     writeln!(stderr, "looking up crates...",)?;

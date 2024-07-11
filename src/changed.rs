@@ -42,7 +42,7 @@ impl Display for ChangeKind {
 
 pub async fn handle_changed(args: Args, diff: Changed) -> Result<()> {
     let mut stdout = args.stdout();
-    let config = cargo::Config::default()?;
+    let config = cargo::GlobalContext::default()?;
     config.shell().set_verbosity(cargo::core::Verbosity::Quiet);
     let path = current_dir()?.join("Cargo.toml");
     let workspace = Workspace::new(&path, &config)?;
@@ -146,7 +146,7 @@ pub fn find_indirect_changes(w: &Workspace, changed: &mut Vec<Change>) {
 pub fn get_changed_crates(w: &Workspace, deps: bool, from: &str, to: &str) -> Result<Vec<Change>> {
     let changed_files = get_changed_files(w, from, to)?;
     let mut changed = Vec::new();
-    let config = w.config();
+    let config = w.gctx();
 
     for c in w.members() {
         if c.publish().is_some() {

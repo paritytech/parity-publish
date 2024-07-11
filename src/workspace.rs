@@ -8,7 +8,7 @@ use std::{collections::HashSet, env::current_dir, io::Write, path::Path};
 
 pub fn handle_workspace(args: Args, mut cli: cli::Workspace) -> Result<()> {
     read_stdin(&mut cli.targets)?;
-    let config = cargo::Config::default()?;
+    let config = cargo::GlobalContext::default()?;
     config.shell().set_verbosity(cargo::core::Verbosity::Quiet);
     let path = current_dir()?.join("Cargo.toml");
     let workspace = Workspace::new(&path, &config)?;
@@ -38,11 +38,8 @@ fn owns(args: &Args, cli: cli::Workspace, w: &Workspace) -> Result<()> {
             {
                 true
             } else {
-                let mut src = cargo::sources::PathSource::new(
-                    c.root(),
-                    c.package_id().source_id(),
-                    w.config(),
-                );
+                let mut src =
+                    cargo::sources::PathSource::new(c.root(), c.package_id().source_id(), w.gctx());
                 src.update().unwrap();
                 let src_files = src.list_files(c)?;
                 src_files

@@ -18,7 +18,7 @@ fn color_ok_red(stdout: &mut impl WriteColor, ok: bool, color: Color) -> Result<
 }
 
 pub async fn handle_status(args: Args, status: Status) -> Result<()> {
-    let config = cargo::Config::default()?;
+    let config = cargo::GlobalContext::default()?;
     let path = current_dir()?.join("Cargo.toml");
     let workspace = Workspace::new(&path, &config)?;
     let members = workspace.members();

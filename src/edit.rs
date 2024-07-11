@@ -304,7 +304,7 @@ pub fn set_description(plan: &Planner, manifest: &mut LocalManifest, name: &str)
     package
         .as_table_mut()
         .unwrap()
-        .insert("description", toml_edit_cargo::value(desc));
+        .insert("description", toml_edit::value(desc));
 
     Ok(())
 }
@@ -312,7 +312,7 @@ pub fn set_description(plan: &Planner, manifest: &mut LocalManifest, name: &str)
 pub fn set_version(manifest: &mut LocalManifest, new_ver: &str) -> Result<()> {
     let package = manifest.manifest.get_table_mut(&["package".to_string()])?;
     let ver = package.get_mut("version").unwrap();
-    *ver = toml_edit_cargo::value(new_ver);
+    *ver = toml_edit::value(new_ver);
     Ok(())
 }
 

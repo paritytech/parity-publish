@@ -3,7 +3,7 @@ use cargo::{
     core::{Package, PackageSet, Workspace},
     sources::{source::SourceMap, RegistrySource},
     util::cache_lock::CacheLockMode,
-    util_semver::VersionExt,
+    util::VersionExt,
 };
 use cargo_semver_checks::ReleaseType;
 use log::debug;
@@ -37,7 +37,7 @@ pub fn handle_public_api(args: Args, mut breaking: Semver) -> Result<()> {
     read_stdin(&mut breaking.crates)?;
     let mut stdout = args.stdout();
     let mut stderr = args.stderr();
-    let config = cargo::Config::default()?;
+    let config = cargo::GlobalContext::default()?;
     config.shell().set_verbosity(cargo::core::Verbosity::Quiet);
     let path = current_dir()?.join("Cargo.toml");
     let workspace = Workspace::new(&path, &config)?;
@@ -108,7 +108,7 @@ pub fn get_from_commit(
     debug!("checked out {} in local clone", commit);
 
     let mut upstream = Vec::new();
-    let uworkspace = Workspace::new(&dir.path().join("Cargo.toml"), workspace.config())?;
+    let uworkspace = Workspace::new(&dir.path().join("Cargo.toml"), workspace.gctx())?;
 
     for c in workspace.members() {
         if c.publish().is_some() {
@@ -137,7 +137,7 @@ fn get_from_last_release(
     let mut stderr = args.stderr();
 
     let _lock = workspace
-        .config()
+        .gctx()
         .acquire_package_cache_lock(CacheLockMode::DownloadExclusive)?;
     let mut reg = registry::get_registry(&workspace)?;
     let mut upstreams = Vec::new();
@@ -176,11 +176,11 @@ fn get_from_last_release(
         let c = Box::new(RegistrySource::remote(
             c.as_summary().source_id(),
             &HashSet::new(),
-            workspace.config(),
+            workspace.gctx(),
         )?);
         sources.insert(c);
     }
-    let download = PackageSet::new(&ids, sources, workspace.config())?;
+    let download = PackageSet::new(&ids, sources, workspace.gctx())?;
     let mut downloads = download.enable_download()?;
     let mut upstreams = Vec::new();
     for id in download.package_ids() {

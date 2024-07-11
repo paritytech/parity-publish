@@ -18,7 +18,7 @@ use termcolor::{Color, ColorSpec, WriteColor};
 
 pub async fn handle_claim(args: Args, claim: Claim) -> Result<()> {
     let mut ret = 0;
-    let config = cargo::Config::default()?;
+    let config = cargo::GlobalContext::default()?;
     config.shell().set_verbosity(cargo::core::Verbosity::Quiet);
     let path = current_dir()?.join("Cargo.toml");
     let workspace = Workspace::new(&path, &config)?;
@@ -69,7 +69,7 @@ pub async fn handle_claim(args: Args, claim: Claim) -> Result<()> {
 
                 let manifest = write_manifest(&member.name())?;
                 let opts = PublishOpts {
-                    config: workspace.config(),
+                    gctx: workspace.gctx(),
                     token: Some(token.clone().into()),
                     verify: false,
                     allow_dirty: true,

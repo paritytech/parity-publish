@@ -97,7 +97,7 @@ fn read_prdoc(
 pub fn handle_prdoc(args: Args, mut prdoc: Prdoc) -> Result<()> {
     read_stdin(&mut prdoc.crates)?;
     let mut stdout = args.stdout();
-    let config = cargo::Config::default()?;
+    let config = cargo::GlobalContext::default()?;
     config.shell().set_verbosity(cargo::core::Verbosity::Quiet);
     let path = current_dir()?.join("Cargo.toml");
     let workspace = Workspace::new(&path, &config)?;

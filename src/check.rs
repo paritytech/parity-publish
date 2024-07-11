@@ -15,7 +15,7 @@ use std::{
 use anyhow::{Context, Result};
 use cargo::{
     core::{dependency::DepKind, Workspace},
-    util_semver::VersionExt,
+    util::VersionExt,
 };
 use termcolor::{ColorChoice, ColorSpec, StandardStream, WriteColor};
 
@@ -147,7 +147,7 @@ async fn issues(check: &Check) -> Result<Vec<Issues>> {
     let mut stderr = StandardStream::stderr(ColorChoice::Auto);
 
     let path = current_dir()?.join("Cargo.toml");
-    let config = cargo::Config::default()?;
+    let config = cargo::GlobalContext::default()?;
     config.shell().set_verbosity(cargo::core::Verbosity::Quiet);
     let workspace = Workspace::new(&path, &config)?;
 

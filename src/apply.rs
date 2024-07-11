@@ -29,7 +29,7 @@ pub async fn handle_apply(args: Args, apply: Apply) -> Result<()> {
     let mut stdout = args.stdout();
     let mut stderr = args.stderr();
 
-    let cargo_config = cargo::Config::default()?;
+    let cargo_config = cargo::GlobalContext::default()?;
     cargo_config
         .shell()
         .set_verbosity(cargo::core::Verbosity::Quiet);
@@ -99,7 +99,7 @@ pub async fn handle_apply(args: Args, apply: Apply) -> Result<()> {
 fn publish(
     args: &Args,
     apply: &Apply,
-    config: &cargo::Config,
+    config: &cargo::GlobalContext,
     plan: Planner,
     path: &Path,
     token: String,
@@ -146,7 +146,7 @@ fn publish(
         let now = Instant::now();
 
         let opts = PublishOpts {
-            config,
+            gctx: config,
             token: Some(token.clone().into()),
             verify: pkg.verify && !apply.dry_run && !apply.no_verify,
             allow_dirty: apply.allow_dirty,

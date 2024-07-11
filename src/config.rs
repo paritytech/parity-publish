@@ -36,7 +36,7 @@ pub fn handle_config(_args: Args, cli: cli::Config) -> Result<()> {
     let path = current_dir()?;
     let config = read_config(&path)?;
 
-    let cargo_config = cargo::Config::default()?;
+    let cargo_config = cargo::GlobalContext::default()?;
     cargo_config
         .shell()
         .set_verbosity(cargo::core::Verbosity::Quiet);

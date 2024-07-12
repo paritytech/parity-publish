@@ -66,7 +66,8 @@ pub fn rewrite_deps(
         let is_workspace = cdep.source().map_or(false, |d| d.as_workspace().is_some());
 
         if is_workspace {
-            return rewrite_workspace_dep(workspace_path, plan, root_manifest, dep);
+            rewrite_workspace_dep(workspace_path, plan, root_manifest, dep)?;
+            continue;
         }
 
         let mut new_ver = if let Some(v) = &dep.version {

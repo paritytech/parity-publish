@@ -1,3 +1,4 @@
+use std::default;
 use std::fs::read_to_string;
 use std::path::Path;
 
@@ -43,11 +44,19 @@ pub fn rewrite_workspace_dep(
     };
 
     if dev {
+        let default_features = wdep.get("default-features").map(|d| d.as_bool().unwrap());
         let path = Path::new(wdep.get("path").unwrap().as_str().unwrap())
             .canonicalize()
             .unwrap();
         let source = PathSource::new(&path);
         *cdep = cdep.clone().set_source(source);
+        if default_features == Some(false) && cdep.default_features != Some(true) {
+            *cdep = cdep.clone().set_default_features(false);
+        }
+        if dep.name != name {
+            cdep.name = name.to_string();
+            *cdep = cdep.clone().set_rename(&dep.name);
+        }
     } else {
         let wdep = wdep.as_inline_table_mut().unwrap();
         wdep.insert("version", toml_edit::Value::String(Formatted::new(new_ver)));

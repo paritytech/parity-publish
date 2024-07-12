@@ -42,6 +42,7 @@ pub fn rewrite_workspace_dep(
 
     let wdep = wdep.as_inline_table_mut().unwrap();
     wdep.insert("version", toml_edit::Value::String(Formatted::new(new_ver)));
+    wdep.fmt();
     Ok(())
 }
 

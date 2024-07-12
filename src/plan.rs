@@ -166,7 +166,6 @@ pub async fn handle_plan(args: Args, mut plan: Plan) -> Result<()> {
         .collect::<BTreeMap<_, _>>();
 
     let mut planner = generate_plan(&args, &plan, &workspace, &workspace_crates, &upstream).await?;
-    write_plan(&workspace, &planner)?;
 
     if plan.print_expanded {
         expand_plan(&workspace, &workspace_crates, &mut planner, &upstream).await?;
@@ -180,6 +179,8 @@ pub async fn handle_plan(args: Args, mut plan: Plan) -> Result<()> {
         write_plan(&workspace, &planner)?;
         return Ok(());
     }
+
+    write_plan(&workspace, &planner)?;
 
     if let Some(from) = &plan.since {
         let changed = changed::get_changed_crates(&workspace, true, from, "HEAD")?;

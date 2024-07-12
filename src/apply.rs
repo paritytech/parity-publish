@@ -78,7 +78,7 @@ pub async fn handle_apply(args: Args, apply: Apply) -> Result<()> {
         edit::set_description(&plan, &mut manifest, &pkg.name)?;
 
         for remove_dep in &pkg.remove_dep {
-            edit::remove_dep(&workspace, &mut manifest, remove_dep)?;
+            edit::remove_dep(&workspace, &mut root_manifest, &mut manifest, remove_dep)?;
         }
 
         edit::rewrite_deps(

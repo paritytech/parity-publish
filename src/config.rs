@@ -1,4 +1,4 @@
-use std::{env::current_dir, fs::read_to_string, path::Path};
+use std::{env::current_dir, fs::read_to_string, path::Path, str::FromStr};
 
 use anyhow::{Context, Result};
 use cargo::{core::Workspace, util::toml_mut::manifest::LocalManifest};
@@ -55,6 +55,9 @@ pub fn apply_config(workspace: &Workspace, config: &Config) -> Result<()> {
         edit::remove_crate(&workspace, pkg)?;
     }
 
+    let root_manifest = std::fs::read_to_string(workspace.root_manifest())?;
+    let mut root_manifest = toml_edit::DocumentMut::from_str(&root_manifest)?;
+
     for pkg in &config.crates {
         let c = workspace
             .members()
@@ -68,10 +71,11 @@ pub fn apply_config(workspace: &Workspace, config: &Config) -> Result<()> {
         }
 
         for remove_dep in &pkg.remove_dep {
-            edit::remove_dep(&workspace, &mut manifest, remove_dep)?;
+            edit::remove_dep(&workspace, &mut root_manifest, &mut manifest, remove_dep)?;
         }
 
         manifest.write()?;
+        std::fs::write(workspace.root_manifest(), &root_manifest.to_string())?;
     }
 
     Ok(())

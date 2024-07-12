@@ -121,14 +121,11 @@ pub fn rewrite_deps(
 
 pub fn remove_dep(
     workspace: &Workspace,
+    root_manifest: &mut DocumentMut,
     manifest: &mut LocalManifest,
     dep: &RemoveDep,
 ) -> Result<()> {
-    let root_manifest = read_to_string(workspace.root_manifest())?;
-    let mut root_manifest: DocumentMut = root_manifest.parse()?;
-    remove_dep_inner(workspace, &mut root_manifest, manifest, dep)?;
-    let root_manifest = root_manifest.to_string();
-    std::fs::write(workspace.root_manifest(), &root_manifest)?;
+    remove_dep_inner(workspace, root_manifest, manifest, dep)?;
     Ok(())
 }
 

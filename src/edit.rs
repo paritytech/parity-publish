@@ -58,44 +58,41 @@ pub fn rewrite_deps(
             .get_dependency_versions(&dep.name)
             .collect::<Vec<_>>();
 
-        let cdep = exisiting_deps
-            .iter()
-            .find_map(|d| d.1.as_ref().ok())
-            .context("coultnt find dep")?;
-        let toml_name = cdep.name.as_str();
-        let is_workspace = cdep.source().map_or(false, |d| d.as_workspace().is_some());
-
-        if is_workspace {
-            rewrite_workspace_dep(workspace_path, plan, root_manifest, dep)?;
-            continue;
-        }
-
-        let mut new_ver = if let Some(v) = &dep.version {
-            v.to_string()
-        } else {
-            plan.crates
-                .iter()
-                .find(|c| c.name == toml_name)
-                .context("cant find package ".to_string() + toml_name)?
-                .to
-                .clone()
-        };
-
-        if !Version::parse(&new_ver).unwrap().pre.is_empty() {
-            new_ver = format!("={}", new_ver);
-        }
-
         for exisiting_dep in exisiting_deps {
             let (table, exisiting_dep) = exisiting_dep;
             let mut existing_dep = exisiting_dep?;
             let dev = table.kind() == DepKind::Development;
 
             if existing_dep.toml_key() == dep.name {
+                let is_workspace = existing_dep
+                    .source()
+                    .map_or(false, |d| d.as_workspace().is_some());
+                if is_workspace {
+                    if !dev {
+                        rewrite_workspace_dep(workspace_path, plan, root_manifest, dep)?;
+                    }
+                    continue;
+                }
+
                 let table = table
                     .to_table()
                     .iter()
                     .map(|s| s.to_string())
                     .collect::<Vec<_>>();
+
+                let mut new_ver = if let Some(v) = &dep.version {
+                    v.to_string()
+                } else {
+                    plan.crates
+                        .iter()
+                        .find(|c| c.name == existing_dep.name.as_str())
+                        .context("cant find package ".to_string() + existing_dep.name.as_str())?
+                        .to
+                        .clone()
+                };
+                if !Version::parse(&new_ver).unwrap().pre.is_empty() {
+                    new_ver = format!("={}", new_ver);
+                }
 
                 if let Some(path) = &dep.path {
                     let path = workspace_path.canonicalize()?.join(path);

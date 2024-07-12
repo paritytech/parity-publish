@@ -7,13 +7,48 @@ use cargo::util::toml_mut::dependency::RegistrySource;
 use cargo::util::toml_mut::manifest::LocalManifest;
 use cargo::{core::dependency::DepKind, util::toml_mut::dependency::PathSource};
 use semver::Version;
-use toml_edit::DocumentMut;
+use toml_edit::{DocumentMut, Formatted};
 
 use crate::plan::{Planner, RemoveCrate, RemoveDep, RemoveFeature, RewriteDep};
+
+pub fn rewrite_workspace_dep(
+    _workspace_path: &Path,
+    plan: &Planner,
+    root_manifest: &mut DocumentMut,
+    dep: &RewriteDep,
+) -> Result<()> {
+    let wdeps = root_manifest
+        .get_mut("workspace")
+        .unwrap()
+        .get_mut("dependencies")
+        .unwrap();
+
+    let wdep = wdeps.get_mut(&dep.name).unwrap();
+    let name = if let Some(package) = wdep.get("package") {
+        package.as_value().unwrap().as_str().unwrap()
+    } else {
+        dep.name.as_str()
+    };
+    let new_ver = if let Some(v) = &dep.version {
+        v.to_string()
+    } else {
+        plan.crates
+            .iter()
+            .find(|c| c.name == name)
+            .context("cant find package ".to_string() + name)?
+            .to
+            .clone()
+    };
+
+    let wdep = wdep.as_inline_table_mut().unwrap();
+    wdep.insert("version", toml_edit::Value::String(Formatted::new(new_ver)));
+    Ok(())
+}
 
 pub fn rewrite_deps(
     workspace_path: &Path,
     plan: &Planner,
+    root_manifest: &mut DocumentMut,
     manifest: &mut LocalManifest,
     deps: &[RewriteDep],
 ) -> Result<()> {
@@ -22,11 +57,16 @@ pub fn rewrite_deps(
             .get_dependency_versions(&dep.name)
             .collect::<Vec<_>>();
 
-        let toml_name = exisiting_deps
+        let cdep = exisiting_deps
             .iter()
             .find_map(|d| d.1.as_ref().ok())
             .context("coultnt find dep")?;
-        let toml_name = toml_name.name.as_str();
+        let toml_name = cdep.name.as_str();
+        let is_workspace = cdep.source().map_or(false, |d| d.as_workspace().is_some());
+
+        if is_workspace {
+            return rewrite_workspace_dep(workspace_path, plan, root_manifest, dep);
+        }
 
         let mut new_ver = if let Some(v) = &dep.version {
             v.to_string()

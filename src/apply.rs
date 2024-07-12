@@ -13,6 +13,7 @@ use std::{
     io::Write,
     ops::Add,
     path::Path,
+    str::FromStr,
     thread,
     time::{Duration, Instant},
 };
@@ -65,10 +66,13 @@ pub async fn handle_apply(args: Args, apply: Apply) -> Result<()> {
         .map(|m| (m.name().as_str(), m))
         .collect::<BTreeMap<_, _>>();
 
+    let root_manifest = std::fs::read_to_string(workspace.root_manifest())?;
+    let mut root_manifest = toml_edit::DocumentMut::from_str(&root_manifest)?;
     for pkg in &plan.crates {
         let Some(c) = workspace_crates.get(pkg.name.as_str()) else {
             continue;
         };
+
         let mut manifest = LocalManifest::try_new(c.manifest_path())?;
         edit::set_version(&mut manifest, &pkg.to)?;
         edit::set_description(&plan, &mut manifest, &pkg.name)?;
@@ -77,7 +81,13 @@ pub async fn handle_apply(args: Args, apply: Apply) -> Result<()> {
             edit::remove_dep(&workspace, &mut manifest, remove_dep)?;
         }
 
-        edit::rewrite_deps(&path, &plan, &mut manifest, &pkg.rewrite_dep)?;
+        edit::rewrite_deps(
+            &path,
+            &plan,
+            &mut root_manifest,
+            &mut manifest,
+            &pkg.rewrite_dep,
+        )?;
 
         for remove_feature in &pkg.remove_feature {
             edit::remove_feature(&mut manifest, remove_feature)?;
@@ -87,6 +97,7 @@ pub async fn handle_apply(args: Args, apply: Apply) -> Result<()> {
         }
 
         manifest.write()?;
+        std::fs::write(workspace.root_manifest(), &root_manifest.to_string())?;
     }
 
     if !apply.publish {

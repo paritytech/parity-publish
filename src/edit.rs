@@ -3,7 +3,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 use cargo::core::{FeatureValue, Workspace};
-use cargo::util::toml_mut::dependency::RegistrySource;
+use cargo::util::toml_mut::dependency::{Dependency, RegistrySource};
 use cargo::util::toml_mut::manifest::LocalManifest;
 use cargo::{core::dependency::DepKind, util::toml_mut::dependency::PathSource};
 use semver::Version;
@@ -16,6 +16,8 @@ pub fn rewrite_workspace_dep(
     plan: &Planner,
     root_manifest: &mut DocumentMut,
     dep: &RewriteDep,
+    cdep: &mut Dependency,
+    dev: bool,
 ) -> Result<()> {
     let wdeps = root_manifest
         .get_mut("workspace")
@@ -40,9 +42,17 @@ pub fn rewrite_workspace_dep(
             .clone()
     };
 
-    let wdep = wdep.as_inline_table_mut().unwrap();
-    wdep.insert("version", toml_edit::Value::String(Formatted::new(new_ver)));
-    wdep.fmt();
+    if dev {
+        let path = Path::new(wdep.get("path").unwrap().as_str().unwrap())
+            .canonicalize()
+            .unwrap();
+        let source = PathSource::new(&path);
+        *cdep = cdep.clone().set_source(source);
+    } else {
+        let wdep = wdep.as_inline_table_mut().unwrap();
+        wdep.insert("version", toml_edit::Value::String(Formatted::new(new_ver)));
+        wdep.fmt();
+    }
     Ok(())
 }
 
@@ -64,21 +74,27 @@ pub fn rewrite_deps(
             let dev = table.kind() == DepKind::Development;
 
             if existing_dep.toml_key() == dep.name {
-                let is_workspace = existing_dep
-                    .source()
-                    .map_or(false, |d| d.as_workspace().is_some());
-                if is_workspace {
-                    if !dev {
-                        rewrite_workspace_dep(workspace_path, plan, root_manifest, dep)?;
-                    }
-                    continue;
-                }
-
                 let table = table
                     .to_table()
                     .iter()
                     .map(|s| s.to_string())
                     .collect::<Vec<_>>();
+
+                let is_workspace = existing_dep
+                    .source()
+                    .map_or(false, |d| d.as_workspace().is_some());
+                if is_workspace {
+                    rewrite_workspace_dep(
+                        workspace_path,
+                        plan,
+                        root_manifest,
+                        dep,
+                        &mut existing_dep,
+                        dev,
+                    )?;
+                    manifest.insert_into_table(&table, &existing_dep)?;
+                    continue;
+                }
 
                 let mut new_ver = if let Some(v) = &dep.version {
                     v.to_string()

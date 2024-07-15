@@ -670,7 +670,7 @@ fn plan_to_str(workspace: &Workspace, planner: &Planner) -> Result<String> {
                         k.leaf_decor_mut()
                             .set_prefix(format!("# {}\n", c.display()))
                     });
-            })
+            });
         });
 
     let command = args().skip(1).collect::<Vec<_>>().join(" ");

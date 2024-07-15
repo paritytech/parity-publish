@@ -1,8 +1,8 @@
+use crate::plan::BumpKind;
 use std::{
     io::{stderr, stdout, IsTerminal},
     path::PathBuf,
 };
-use crate::plan::BumpKind;
 
 use clap::{ArgAction, Parser};
 use termcolor::{ColorChoice, StandardStream};
@@ -95,6 +95,9 @@ pub struct Claim {
 
 #[derive(Parser, Debug)]
 pub struct Workspace {
+    /// Just print paths, pass twice to print manifests
+    #[arg(long, short, action = ArgAction::Count)]
+    pub paths: u8,
     /// Only print crate names
     #[arg(long, short)]
     pub quiet: bool,

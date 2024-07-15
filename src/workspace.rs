@@ -81,7 +81,17 @@ fn members(args: &Args, cli: cli::Workspace, w: &Workspace) -> Result<()> {
             continue;
         };
 
-        if cli.quiet {
+        if cli.paths > 1 {
+            writeln!(
+                stdout,
+                "{}",
+                c.root()
+                    .strip_prefix(w.root())
+                    .unwrap()
+                    .join("Cargo.toml")
+                    .display()
+            )?;
+        } else if cli.quiet || cli.paths == 1 {
             writeln!(
                 stdout,
                 "{}",

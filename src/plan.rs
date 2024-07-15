@@ -656,7 +656,6 @@ fn plan_to_str(workspace: &Workspace, planner: &Planner) -> Result<String> {
     let mut planner: DocumentMut = toml_edit::ser::to_string_pretty(planner)?.parse()?;
 
     planner
-        .as_table_mut()
         .get_mut("crate")
         .and_then(|c| c.as_array_of_tables_mut())
         .into_iter()
@@ -668,10 +667,10 @@ fn plan_to_str(workspace: &Workspace, planner: &Planner) -> Result<String> {
                     .find(|name| Some(name.name().as_str()) == v.as_str())
                     .and_then(|c| c.root().strip_prefix(workspace.root()).ok())
                     .map(|c| {
-                        k.dotted_decor_mut()
+                        k.leaf_decor_mut()
                             .set_prefix(format!("# {}\n", c.display()))
-                    })
-            });
+                    });
+            })
         });
 
     let command = args().skip(1).collect::<Vec<_>>().join(" ");

@@ -1,4 +1,3 @@
-use std::default;
 use std::fs::read_to_string;
 use std::path::Path;
 

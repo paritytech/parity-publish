@@ -224,21 +224,19 @@ pub fn get_changes(
             c.name(),
         )?;
 
-        println!("1");
         let json_path = rustdoc_json::Builder::default()
             .toolchain(&breaking.toolchain)
             .quiet(true)
             .silent(silent)
             .manifest_path(c.manifest_path())
             .build()?;
-        println!("2");
 
         // Backup the file to avoid overwriting it in the next `rustdoc_json::Builder` invocation:
         let _ = std::fs::copy(&json_path, json_path.with_extension("new"));
         let json_path = json_path.with_extension("new");
 
         let new = cargo_semver_checks::Rustdoc::from_path(&json_path);
-        let new_diff = public_api::Builder::from_rustdoc_json(&json_path).build()?;
+        //let new_diff = public_api::Builder::from_rustdoc_json(&json_path).build()?;
         let mut new = cargo_semver_checks::Check::new(new);
 
         n += 1;
@@ -264,13 +262,19 @@ pub fn get_changes(
 
         let path = c.root().strip_prefix(workspace.root()).unwrap();
         let old = cargo_semver_checks::Rustdoc::from_path(&json_path);
-        let old_diff = public_api::Builder::from_rustdoc_json(&json_path).build()?;
+        //let old_diff = public_api::Builder::from_rustdoc_json(&json_path).build()?;
         let report = new
             .set_baseline(old)
             .check_release(&mut Default::default())?;
 
         let report = report.crate_reports().first_key_value().unwrap().1;
-        let diff = public_api::diff::PublicApiDiff::between(old_diff, new_diff);
+        //let diff = public_api::diff::PublicApiDiff::between(old_diff, new_diff);
+
+        let diff = PublicApiDiff {
+            removed: Default::default(),
+            changed: Default::default(),
+            added: Default::default(),
+        };
 
         let bump = match report.required_bump() {
             Some(ReleaseType::Major) => BumpKind::Major,

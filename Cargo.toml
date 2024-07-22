@@ -8,24 +8,24 @@ license = "Apache-2.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.81"
+anyhow = "1.0.86"
 cargo = "0.80.0"
-cargo-semver-checks = "0.29.1"
-clap = { version = "4.5.2", features = ["derive"] }
+cargo-semver-checks = "0.31.0"
+clap = { version = "4.5.9", features = ["derive"] }
 crates_io_api = "0.9.0"
 futures = "0.3.30"
-log = "0.4.21"
-public-api = "0.33.1"
-reqwest = "0.11.26"
-rustdoc-json = "0.9.0"
-semver = "1.0.22"
-serde = { version = "1.0.197", features = ["derive"] }
+log = "0.4.22"
+public-api = "0.36.0"
+reqwest = "0.12.5"
+rustdoc-json = "0.9.1"
+semver = "1.0.23"
+serde = { version = "1.0.204", features = ["derive"] }
 serde_yaml = "0.9.34"
 simple_logger = "5.0.0"
 tempfile = "3.10.1"
 termcolor = "1.4.1"
-tokio = { version = "1.36.0", features = ["rt-multi-thread", "macros"] }
-toml = { version = "0.8.11", features = ["preserve_order"] }
-toml_edit = "0.22.7"
+tokio = { version = "1.38.1", features = ["rt-multi-thread", "macros"] }
+toml = { version = "0.8.15", features = ["preserve_order"] }
+toml_edit = "0.22.16"
 #toml_edit_cargo = { version = "0.21.0", package = "toml_edit" }
 walkdir = "2.5.0"

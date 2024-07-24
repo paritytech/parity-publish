@@ -67,7 +67,7 @@ fn read_prdoc(
     workspace: &Workspace<'_>,
     entries: &mut HashMap<String, Change>,
 ) -> Result<(), anyhow::Error> {
-    let prdoc = read_to_string(path).context("failed to read prdo")?;
+    let prdoc = read_to_string(path).context("failed to read prdoc")?;
     let prdoc: Document = serde_yaml::from_str(&prdoc)?;
     Ok(for c in prdoc.crates {
         let Some(package) = workspace.members().find(|m| m.name().as_str() == c.name) else {
@@ -81,7 +81,7 @@ fn read_prdoc(
         let bump = match c.bump.as_str() {
             "patch" => BumpKind::Patch,
             "minor" => BumpKind::Minor,
-            "none" => continue,
+            "none" => BumpKind::None,
             _ => BumpKind::Major,
         };
         let entry = entries.entry(c.name.to_string()).or_insert(Change {

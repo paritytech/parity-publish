@@ -200,7 +200,7 @@ pub async fn handle_plan(args: Args, mut plan: Plan) -> Result<()> {
     }
 
     if let Some(path) = &plan.prdoc {
-        let mut changed = prdoc::get_prdocs(&workspace, path, true, &[])?;
+        let mut changed = prdoc::get_prdocs(&args, &workspace, path, true, &[])?;
 
         changed.retain(|c| {
             workspace_crates

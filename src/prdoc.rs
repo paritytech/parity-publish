@@ -6,7 +6,7 @@ use std::path::Path;
 
 use anyhow::{bail, Context, Result};
 use cargo::core::Workspace;
-use termcolor::{ColorSpec, WriteColor};
+use termcolor::{Color, ColorSpec, WriteColor};
 
 use crate::changed::{find_indirect_changes, get_changed_crates, Change, ChangeKind};
 use crate::cli::{Args, Prdoc, Semver};
@@ -27,14 +27,22 @@ struct Crates {
 }
 
 pub fn get_prdocs(
+    args: &Args,
     workspace: &Workspace,
     path: &Path,
     deps: bool,
     filter: &[String],
 ) -> Result<Vec<Change>> {
+    let mut stderr = args.stderr();
     let mut entries = HashMap::new();
 
-    if path.is_file() {
+    if !path.exists() {
+        stderr.set_color(ColorSpec::new().set_fg(Some(Color::Yellow)).set_bold(true))?;
+        write!(stderr, "warning: ")?;
+        stderr.set_color(&ColorSpec::new())?;
+        writeln!(stderr, "no PR Doc")?;
+        return Ok(Vec::new());
+    } else if path.is_file() {
         read_prdoc(path, workspace, &mut entries)?;
     } else {
         let dirs = read_dir(path).context("failed to read prdoc dir")?;
@@ -107,7 +115,7 @@ pub fn handle_prdoc(args: Args, mut prdoc: Prdoc) -> Result<()> {
         return validate(&args, &prdoc, &workspace);
     }
 
-    let prdocs = get_prdocs(&workspace, &prdoc.prdoc_path, deps, &prdoc.crates)?;
+    let prdocs = get_prdocs(&args, &workspace, &prdoc.prdoc_path, deps, &prdoc.crates)?;
 
     for c in prdocs {
         if prdoc.major && c.bump != BumpKind::Major {
@@ -154,7 +162,7 @@ fn validate(args: &Args, prdoc: &Prdoc, w: &Workspace) -> Result<()> {
     writeln!(stdout)?;
 
     writeln!(stdout, "validating prdocs...")?;
-    let prdocs = get_prdocs(w, &prdoc.prdoc_path, false, &prdoc.crates)?;
+    let prdocs = get_prdocs(args, w, &prdoc.prdoc_path, false, &prdoc.crates)?;
     let max_bump = prdoc.max_bump;
 
     writeln!(stdout, "checking file changes...")?;
@@ -228,11 +236,7 @@ fn validate(args: &Args, prdoc: &Prdoc, w: &Workspace) -> Result<()> {
                     "Detected"
                 };
 
-                write!(
-                    stdout,
-                    "    {} bump exceeds allowed bump level: ",
-                    location,
-                )?;
+                write!(stdout, "    {} bump exceeds allowed bump level: ", location,)?;
                 stdout.set_color(ColorSpec::new().set_bold(true))?;
                 write!(stdout, "{}", prdoc.bump.max(predicted))?;
                 stdout.set_color(ColorSpec::new().set_bold(false))?;

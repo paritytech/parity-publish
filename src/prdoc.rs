@@ -163,113 +163,117 @@ fn validate(args: &Args, prdoc: &Prdoc, w: &Workspace) -> Result<()> {
 
     writeln!(stdout, "validating prdocs...")?;
     let prdocs = get_prdocs(args, w, &prdoc.prdoc_path, false, &prdoc.crates)?;
+
     let max_bump = prdoc.max_bump;
 
     writeln!(stdout, "checking file changes...")?;
     let changes = get_changed_crates(w, false, from, "HEAD")?;
-
-    writeln!(stdout, "checking semver changes...")?;
-    let mut crates = prdocs
-        .iter()
-        .map(|p| p.name.clone())
-        .chain(changes.iter().map(|c| c.name.clone()))
-        .collect::<Vec<_>>();
-    crates.sort();
-    crates.dedup();
-    let breaking = Semver {
-        paths: 0,
-        quiet: true,
-        major: false,
-        verbose: false,
-        minimum_nightly_rust_version: false,
-        since: Some(from.clone()),
-        crates,
-        toolchain: prdoc.toolchain.clone(),
-    };
-    let (_tmp, upstreams) = public_api::get_from_commit(&w, &breaking, from)?;
-
-    let breaking = public_api::get_changes(args, w, upstreams, &breaking, !prdoc.verbose)?;
     let mut ok = true;
 
-    writeln!(stdout)?;
+    if !prdocs.is_empty() {
+        writeln!(stdout, "checking semver changes...")?;
+        let mut crates = prdocs
+            .iter()
+            .map(|p| p.name.clone())
+            .chain(changes.iter().map(|c| c.name.clone()))
+            .collect::<Vec<_>>();
+        crates.sort();
+        crates.dedup();
+        let breaking = Semver {
+            paths: 0,
+            quiet: true,
+            major: false,
+            verbose: false,
+            minimum_nightly_rust_version: false,
+            since: Some(from.clone()),
+            crates,
+            toolchain: prdoc.toolchain.clone(),
+        };
+        let (_tmp, upstreams) = public_api::get_from_commit(&w, &breaking, from)?;
 
-    for prdoc in &prdocs {
-        let changed = changes.iter().any(|c| c.name == prdoc.name);
-        let api_change = breaking.iter().find(|c| c.name == prdoc.name);
-
-        let predicted = api_change.map(|b| b.bump).unwrap_or_else(|| {
-            if changed {
-                BumpKind::Patch
-            } else {
-                BumpKind::None
-            }
-        });
-
-        if prdoc.bump == predicted || (prdoc.bump == BumpKind::None && predicted == BumpKind::Patch)
-        {
-            continue;
-        }
-
-        stdout.set_color(ColorSpec::new().set_bold(true))?;
-        write!(stdout, "{}", prdoc.name)?;
-        stdout.set_color(ColorSpec::new().set_bold(false))?;
-        writeln!(stdout, " ({}):", prdoc.path.display())?;
-        write!(stdout, "    Change stated in PR Doc: ")?;
-        stdout.set_color(ColorSpec::new().set_bold(true))?;
-        writeln!(stdout, "{}", prdoc.bump)?;
-        stdout.set_color(ColorSpec::new().set_bold(false))?;
-        write!(stdout, "    Predicted semver change: ")?;
-        stdout.set_color(ColorSpec::new().set_bold(true))?;
-        writeln!(stdout, "{}", predicted)?;
-        stdout.set_color(ColorSpec::new().set_bold(false))?;
-
-        if let Some(max_allowed_bump) = max_bump {
-            let prdoc_bad = prdoc.bump > max_allowed_bump;
-            let predicted_bad = predicted > max_allowed_bump;
-
-            if prdoc_bad || predicted_bad {
-                let location = if prdoc_bad && predicted_bad {
-                    "Specified and detected"
-                } else if prdoc_bad {
-                    "Specified"
-                } else {
-                    "Detected"
-                };
-
-                write!(stdout, "    {} bump exceeds allowed bump level: ", location,)?;
-                stdout.set_color(ColorSpec::new().set_bold(true))?;
-                write!(stdout, "{}", prdoc.bump.max(predicted))?;
-                stdout.set_color(ColorSpec::new().set_bold(false))?;
-                write!(stdout, " > ")?;
-                stdout.set_color(ColorSpec::new().set_bold(true))?;
-                writeln!(stdout, "{}", max_allowed_bump)?;
-                stdout.set_color(ColorSpec::new().set_bold(false))?;
-                ok = false;
-            }
-        }
-
-        if let Some(api_change) = api_change {
-            if api_change.bump == BumpKind::Major && prdoc.bump != BumpKind::Major {
-                writeln!(
-                    stdout,
-                    "    Major API change found but prdoc specified {}",
-                    prdoc.bump
-                )?;
-                ok = false;
-            }
-            if api_change.bump == BumpKind::Minor && prdoc.bump == BumpKind::Patch {
-                // just warn don't return 1 for this
-                writeln!(
-                    stdout,
-                    "    Minor API change found but prdoc specified {}",
-                    prdoc.bump
-                )?;
-                ok = false;
-            }
-            print_diff(args, &api_change)?;
-        }
+        let breaking = public_api::get_changes(args, w, upstreams, &breaking, !prdoc.verbose)?;
 
         writeln!(stdout)?;
+
+        for prdoc in &prdocs {
+            let changed = changes.iter().any(|c| c.name == prdoc.name);
+            let api_change = breaking.iter().find(|c| c.name == prdoc.name);
+
+            let predicted = api_change.map(|b| b.bump).unwrap_or_else(|| {
+                if changed {
+                    BumpKind::Patch
+                } else {
+                    BumpKind::None
+                }
+            });
+
+            if prdoc.bump == predicted
+                || (prdoc.bump == BumpKind::None && predicted == BumpKind::Patch)
+            {
+                continue;
+            }
+
+            stdout.set_color(ColorSpec::new().set_bold(true))?;
+            write!(stdout, "{}", prdoc.name)?;
+            stdout.set_color(ColorSpec::new().set_bold(false))?;
+            writeln!(stdout, " ({}):", prdoc.path.display())?;
+            write!(stdout, "    Change stated in PR Doc: ")?;
+            stdout.set_color(ColorSpec::new().set_bold(true))?;
+            writeln!(stdout, "{}", prdoc.bump)?;
+            stdout.set_color(ColorSpec::new().set_bold(false))?;
+            write!(stdout, "    Predicted semver change: ")?;
+            stdout.set_color(ColorSpec::new().set_bold(true))?;
+            writeln!(stdout, "{}", predicted)?;
+            stdout.set_color(ColorSpec::new().set_bold(false))?;
+
+            if let Some(max_allowed_bump) = max_bump {
+                let prdoc_bad = prdoc.bump > max_allowed_bump;
+                let predicted_bad = predicted > max_allowed_bump;
+
+                if prdoc_bad || predicted_bad {
+                    let location = if prdoc_bad && predicted_bad {
+                        "Specified and detected"
+                    } else if prdoc_bad {
+                        "Specified"
+                    } else {
+                        "Detected"
+                    };
+
+                    write!(stdout, "    {} bump exceeds allowed bump level: ", location,)?;
+                    stdout.set_color(ColorSpec::new().set_bold(true))?;
+                    write!(stdout, "{}", prdoc.bump.max(predicted))?;
+                    stdout.set_color(ColorSpec::new().set_bold(false))?;
+                    write!(stdout, " > ")?;
+                    stdout.set_color(ColorSpec::new().set_bold(true))?;
+                    writeln!(stdout, "{}", max_allowed_bump)?;
+                    stdout.set_color(ColorSpec::new().set_bold(false))?;
+                    ok = false;
+                }
+            }
+
+            if let Some(api_change) = api_change {
+                if api_change.bump == BumpKind::Major && prdoc.bump != BumpKind::Major {
+                    writeln!(
+                        stdout,
+                        "    Major API change found but prdoc specified {}",
+                        prdoc.bump
+                    )?;
+                    ok = false;
+                }
+                if api_change.bump == BumpKind::Minor && prdoc.bump == BumpKind::Patch {
+                    // just warn don't return 1 for this
+                    writeln!(
+                        stdout,
+                        "    Minor API change found but prdoc specified {}",
+                        prdoc.bump
+                    )?;
+                    ok = false;
+                }
+                print_diff(args, &api_change)?;
+            }
+
+            writeln!(stdout)?;
+        }
     }
 
     for change in &changes {

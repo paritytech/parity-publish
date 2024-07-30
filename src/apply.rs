@@ -145,7 +145,7 @@ fn publish(
             continue;
         }
 
-        writeln!(
+        write!(
             stdout,
             "({:3<}/{:3<}) publishing {}-{}...",
             n, total, pkg.name, pkg.to
@@ -170,6 +170,8 @@ fn publish(
             reg_or_index: None,
         };
         cargo::ops::publish(&workspace, &opts)?;
+
+        writeln!(stdout, " ({}s)", (now - Instant::now()).as_secs())?;
 
         if let Some(delay) = now.add(wait).checked_duration_since(Instant::now()) {
             thread::sleep(delay);

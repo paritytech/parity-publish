@@ -140,16 +140,19 @@ fn publish(
 
     drop(_lock);
 
-    for pkg in plan.crates.iter().filter(|c| c.publish) {
-        if version_exists(&mut reg, &pkg.name, &pkg.to) {
-            continue;
-        }
-
+    let mut iter = plan
+        .crates
+        .iter()
+        .filter(|c| c.publish)
+        .filter(|c| !version_exists(&mut reg, &c.name, &c.to))
+        .peekable();
+    while let Some(pkg) = iter.next() {
         write!(
             stdout,
             "({:3<}/{:3<}) publishing {}-{}...",
             n, total, pkg.name, pkg.to
         )?;
+        stdout.flush()?;
 
         n += 1;
 
@@ -173,8 +176,10 @@ fn publish(
 
         writeln!(stdout, " ({}s)", (now - Instant::now()).as_secs())?;
 
-        if let Some(delay) = now.add(wait).checked_duration_since(Instant::now()) {
-            thread::sleep(delay);
+        if iter.peek().is_some() {
+            if let Some(delay) = now.add(wait).checked_duration_since(Instant::now()) {
+                thread::sleep(delay);
+            }
         }
     }
 

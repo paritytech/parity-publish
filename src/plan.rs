@@ -59,7 +59,7 @@ impl Display for BumpKind {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub enum PublishReason {
     #[serde(rename = "bumped by --patch")]
     Bumped,
@@ -71,7 +71,7 @@ pub enum PublishReason {
     All,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Default, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug)]
 pub struct Options {
     pub description: Option<String>,
 }
@@ -90,7 +90,7 @@ pub struct Planner {
     pub remove_crates: Vec<RemoveCrate>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Default, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug)]
 pub struct Publish {
     pub name: String,
     pub from: String,
@@ -118,7 +118,7 @@ pub struct Publish {
     pub remove_feature: Vec<RemoveFeature>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Default, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug)]
 pub struct RewriteDep {
     pub name: String,
     #[serde(skip_serializing_if = "is_default")]
@@ -135,7 +135,7 @@ pub struct RemoveDep {
     pub package: Option<String>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Default, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug)]
 pub struct RemoveFeature {
     pub feature: String,
     #[serde(skip_serializing_if = "is_default")]
@@ -143,7 +143,7 @@ pub struct RemoveFeature {
     pub value: Option<String>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Default, Eq, PartialEq, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Default, Eq, PartialEq, Clone, Debug)]
 pub struct RemoveCrate {
     pub name: String,
 }

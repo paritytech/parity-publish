@@ -1,6 +1,6 @@
 [package]
 name = "parity-publish"
-version = "0.8.0"
+version = "0.9.0"
 edition = "2021"
 description = "A tool to manage publishing Parity's crates"
 license = "Apache-2.0"
@@ -9,23 +9,23 @@ license = "Apache-2.0"
 
 [dependencies]
 anyhow = "1.0.86"
-cargo = "0.80.0"
-cargo-semver-checks = "0.31.0"
-clap = { version = "4.5.9", features = ["derive"] }
-crates_io_api = "0.9.0"
+cargo = "0.81.0"
+cargo-semver-checks = { version = "0.33.0", default-features = false, features = ["gix-curl"] }
+clap = { version = "4.5.12", features = ["derive"] }
+crates_io_api = "0.11.0"
 futures = "0.3.30"
 log = "0.4.22"
-public-api = "0.36.0"
+public-api = "0.37.0"
 reqwest = "0.12.5"
-rustdoc-json = "0.9.1"
+rustdoc-json = "0.9.2"
 semver = "1.0.23"
 serde = { version = "1.0.204", features = ["derive"] }
 serde_yaml = "0.9.34"
 simple_logger = "5.0.0"
 tempfile = "3.10.1"
 termcolor = "1.4.1"
-tokio = { version = "1.38.1", features = ["rt-multi-thread", "macros"] }
-toml = { version = "0.8.15", features = ["preserve_order"] }
-toml_edit = "0.22.16"
+tokio = { version = "1.39.2", features = ["rt-multi-thread", "macros"] }
+toml = { version = "0.8.19", features = ["preserve_order"] }
+toml_edit = "0.22.20"
 #toml_edit_cargo = { version = "0.21.0", package = "toml_edit" }
 walkdir = "2.5.0"

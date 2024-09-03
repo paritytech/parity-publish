@@ -29,6 +29,7 @@ struct Issues {
     name: String,
     path: PathBuf,
     no_desc: bool,
+    no_repo: bool,
     no_license: bool,
     unpublished: bool,
     taken: bool,
@@ -45,6 +46,7 @@ impl Issues {
             || self.broken_readme
             || self.needs_publish.is_some()
             || self.no_desc
+            || self.no_repo
             || self.unpublished
             || self.prerelease
             || self.version_zero
@@ -52,6 +54,7 @@ impl Issues {
 
     fn ret_err(&self, check: &Check) -> bool {
         let no_desc = self.no_desc && !check.allow_nonfatal;
+        let no_repo = self.no_repo && !check.allow_nonfatal;
         let unpublished = self.no_desc && !check.allow_unpublished;
         self.no_license
             || self.taken
@@ -60,6 +63,7 @@ impl Issues {
             || self.prerelease
             || self.version_zero
             || no_desc
+            || no_repo
             || unpublished
     }
 
@@ -82,6 +86,9 @@ impl Issues {
 
             if self.no_desc {
                 writeln!(stdout, "    no description")?;
+            }
+            if self.no_repo {
+                writeln!(stdout, "    no repository")?;
             }
             if self.no_license {
                 writeln!(stdout, "    no license")?;
@@ -260,6 +267,7 @@ async fn issues(check: &Check) -> Result<Vec<Issues>> {
             }
 
             issues.no_desc = c.manifest().metadata().description.is_none();
+            issues.no_repo = c.manifest().metadata().repository.is_none();
             issues.no_license = c.manifest().metadata().license.is_none()
                 && c.manifest().metadata().license_file.is_none();
 

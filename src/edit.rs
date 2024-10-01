@@ -10,7 +10,6 @@ use semver::Version;
 use toml_edit::{DocumentMut, Formatted};
 
 use crate::plan::{Planner, RemoveCrate, RemoveDep, RemoveFeature, RewriteDep};
-use crate::workspace;
 
 pub fn rewrite_workspace_dep(
     _workspace_path: &Path,
@@ -371,6 +370,7 @@ pub fn set_readme_desc(w: &Workspace, plan: &Planner) -> Result<()> {
     Ok(())
 }
 
+/*
 // hack because come crates don't have a desc
 pub fn set_description(plan: &Planner, manifest: &mut LocalManifest, name: &str) -> Result<()> {
     let package = manifest.manifest.get_table_mut(&["package".to_string()])?;
@@ -395,6 +395,7 @@ pub fn set_description(plan: &Planner, manifest: &mut LocalManifest, name: &str)
 
     Ok(())
 }
+*/
 
 pub fn set_version(manifest: &mut LocalManifest, new_ver: &str) -> Result<()> {
     let package = manifest.manifest.get_table_mut(&["package".to_string()])?;

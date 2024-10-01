@@ -10,6 +10,7 @@ use semver::Version;
 use toml_edit::{DocumentMut, Formatted};
 
 use crate::plan::{Planner, RemoveCrate, RemoveDep, RemoveFeature, RewriteDep};
+use crate::workspace;
 
 pub fn rewrite_workspace_dep(
     _workspace_path: &Path,
@@ -339,6 +340,32 @@ pub fn remove_feature(manifest: &mut LocalManifest, remove_feature: &RemoveFeatu
         }
     } else {
         features.remove(&remove_feature.feature);
+    }
+
+    Ok(())
+}
+
+pub fn set_readme_desc(w: &Workspace, plan: &Planner) -> Result<()> {
+    let Some(desc) = plan.options.description.as_ref() else {
+        return Ok(());
+    };
+
+    let desc = format!("\n\n## Release\n\n{}\n", desc);
+
+    for c in w.members() {
+        let path = c.root().join("README.md");
+        let readme = if let Ok(readme) = std::fs::read_to_string(&path) {
+            readme
+        } else {
+            String::new()
+        };
+        let mut readme = readme
+            .split("\n\n## Release\n\n")
+            .next()
+            .unwrap()
+            .to_string();
+        readme.push_str(&desc);
+        std::fs::write(path, readme)?;
     }
 
     Ok(())

@@ -207,7 +207,7 @@ fn publish(
         writeln!(stdout, " ({}s)", (now - Instant::now()).as_secs())?;
 
         if iter.peek().is_some() {
-            if let Some(delay) = now.add(wait).checked_duration_since(Instant::now()) {
+            if let Some(delay) = now.add(wait).checked_duration_since(now) {
                 thread::sleep(delay);
             }
         }

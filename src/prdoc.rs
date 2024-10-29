@@ -99,7 +99,6 @@ fn read_prdoc(
             path: path.into(),
             kind,
             bump,
-            manifest_changed: false,
         });
         entry.bump = entry.bump.max(bump);
     })
@@ -211,6 +210,7 @@ fn validate(args: &Args, prdoc: &Prdoc, w: &Workspace) -> Result<()> {
             });
 
             let manifest_changed = manifest_changed(
+                w,
                 w.root(),
                 prdoc.path.join("Cargo.toml").to_str().unwrap(),
                 from,

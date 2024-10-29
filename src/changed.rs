@@ -15,13 +15,32 @@ use termcolor::{ColorSpec, WriteColor};
 use toml_edit::visit_mut::VisitMut;
 use toml_edit::Table;
 
+struct Sorter;
+
+impl VisitMut for Sorter {
+    fn visit_document_mut(&mut self, node: &mut toml_edit::DocumentMut) {
+        node.set_trailing("");
+    }
+
+    fn visit_value_mut(&mut self, node: &mut toml_edit::Value) {
+        node.decor_mut().clear();
+    }
+
+    fn visit_table_like_mut(&mut self, node: &mut dyn toml_edit::TableLike) {
+        node.sort_values();
+    }
+
+    fn visit_array_mut(&mut self, node: &mut toml_edit::Array) {
+        node.sort_by_key(|k| k.as_str().unwrap().to_string());
+    }
+}
+
 #[derive(Debug)]
 pub struct Change {
     pub name: String,
     pub path: PathBuf,
     pub kind: ChangeKind,
     pub bump: BumpKind,
-    pub manifest_changed: bool,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -138,7 +157,6 @@ pub fn find_indirect_changes(w: &Workspace, changed: &mut Vec<Change>) {
                 path: path.to_path_buf(),
                 kind: ChangeKind::Dependency,
                 bump: BumpKind::Major,
-                manifest_changed: false,
             };
             changed.push(change);
         }
@@ -166,20 +184,18 @@ pub fn get_changed_crates(w: &Workspace, deps: bool, from: &str, to: &str) -> Re
 
         src_files.retain(|f| changed_files.contains(f));
 
-        let manifest_changed =
-            if let Some(f) = src_files.iter().find(|f| f.ends_with("/Cargo.toml")) {
-                manifest_changed(w.root(), f, from, to)? != BumpKind::None
-            } else {
-                false
-            };
+        let kind = if src_files.len() == 1 && src_files[0].ends_with("/Cargo.toml") {
+            ChangeKind::Manifest
+        } else {
+            ChangeKind::Files
+        };
 
         if !src_files.is_empty() {
             let change = Change {
                 name: c.name().to_string(),
                 path: path.to_path_buf(),
-                kind: ChangeKind::Files,
+                kind,
                 bump: BumpKind::Major,
-                manifest_changed,
             };
             changed.push(change);
         }
@@ -200,27 +216,13 @@ pub fn get_changed_crates(w: &Workspace, deps: bool, from: &str, to: &str) -> Re
     Ok(changed)
 }
 
-pub fn manifest_changed(root: &Path, path: &str, from: &str, to: &str) -> Result<BumpKind> {
-    struct Sorter;
-
-    impl VisitMut for Sorter {
-        fn visit_document_mut(&mut self, node: &mut toml_edit::DocumentMut) {
-            node.set_trailing("");
-        }
-
-        fn visit_value_mut(&mut self, node: &mut toml_edit::Value) {
-            node.decor_mut().clear();
-        }
-
-        fn visit_table_like_mut(&mut self, node: &mut dyn toml_edit::TableLike) {
-            node.sort_values();
-        }
-
-        fn visit_array_mut(&mut self, node: &mut toml_edit::Array) {
-            node.sort_by_key(|k| k.as_str().unwrap().to_string());
-        }
-    }
-
+pub fn manifest_changed(
+    _workspace: &Workspace,
+    root: &Path,
+    path: &str,
+    from: &str,
+    to: &str,
+) -> Result<BumpKind> {
     let new = get_file(root, path, to)?;
     let old = if let Ok(old) = get_file(root, path, from) {
         old
@@ -230,6 +232,15 @@ pub fn manifest_changed(root: &Path, path: &str, from: &str, to: &str) -> Result
 
     let mut old = toml_edit::DocumentMut::from_str(&old)?;
     let mut new = toml_edit::DocumentMut::from_str(&new)?;
+
+    //let old_deps = old.remove("dependencies").unwrap_or_default();
+    //let new_deps = new.remove("dependencies").unwrap_or_default();
+
+    //let mut changes = BTreeMap::new();
+    //manifest_deps_changed(workspace, &mut changes, &old_deps, &new_deps)?;
+    //if let Some(bump) = changes.iter().max() {
+    //    return Ok(*bump.1);
+    //}
 
     for c in [&mut old, &mut new] {
         c.remove("build-dependencies");
@@ -246,7 +257,7 @@ pub fn manifest_changed(root: &Path, path: &str, from: &str, to: &str) -> Result
 
     let changed = old.to_string() != new.to_string();
     if changed {
-        Ok(BumpKind::Major)
+        Ok(BumpKind::Minor)
     } else {
         Ok(BumpKind::None)
     }

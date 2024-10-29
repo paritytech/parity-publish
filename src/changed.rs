@@ -8,12 +8,12 @@ use std::str::FromStr;
 
 use crate::cli::{Args, Changed};
 use crate::plan::BumpKind;
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use cargo::core::dependency::DepKind;
-use cargo::core::{Package, Workspace};
+use cargo::core::Workspace;
 use termcolor::{ColorSpec, WriteColor};
 use toml_edit::visit_mut::VisitMut;
-use toml_edit::{Formatted, InlineTable, Item, Table, Value};
+use toml_edit::Table;
 
 struct Sorter;
 
@@ -184,17 +184,22 @@ pub fn get_changed_crates(w: &Workspace, deps: bool, from: &str, to: &str) -> Re
 
         src_files.retain(|f| changed_files.contains(f));
 
-        let kind = if src_files.len() == 1 && src_files[0].ends_with("/Cargo.toml") {
-            ChangeKind::Manifest
-        } else {
-            ChangeKind::Files
-        };
-
-        if !src_files.is_empty() {
+        if src_files.len() == 1
+            && src_files[0].ends_with("/Cargo.toml")
+            && manifest_changed(w.root(), &src_files[0], from, to)? != BumpKind::None
+        {
             let change = Change {
                 name: c.name().to_string(),
                 path: path.to_path_buf(),
-                kind,
+                kind: ChangeKind::Manifest,
+                bump: BumpKind::Major,
+            };
+            changed.push(change);
+        } else if !src_files.is_empty() {
+            let change = Change {
+                name: c.name().to_string(),
+                path: path.to_path_buf(),
+                kind: ChangeKind::Files,
                 bump: BumpKind::Major,
             };
             changed.push(change);
@@ -216,72 +221,7 @@ pub fn get_changed_crates(w: &Workspace, deps: bool, from: &str, to: &str) -> Re
     Ok(changed)
 }
 
-fn changed_via_root_manifest<'a>(
-    workspace: &'a Workspace,
-    from: &str,
-    to: &str,
-) -> Result<Vec<String>> {
-    let mut ret = Vec::new();
-
-    let old = get_file(workspace.root(), "Cargo.toml", from)?;
-    let new = get_file(workspace.root(), "Cargo.toml", to)?;
-    let old = toml_edit::DocumentMut::from_str(&old)?;
-    let new = toml_edit::DocumentMut::from_str(&new)?;
-
-    let t = Item::Table(Table::new());
-
-    let old = old
-        .get("workspace")
-        .and_then(|old| old.get("dependencies"))
-        .unwrap_or_else(|| &t);
-    let new = new
-        .get("workspace")
-        .and_then(|new| new.get("dependencies"))
-        .unwrap_or_else(|| &t);
-
-    for (name, old) in old.as_table().context("not a table")? {
-        let Some(new) = new.get(name) else {
-            continue;
-        };
-
-        let mut old = old.clone();
-        let mut new = new.clone();
-
-        if let Some(s) = old.as_str() {
-            let mut t = InlineTable::new();
-            t.insert("version", Value::String(Formatted::new(s.to_string())));
-            old = Item::Value(Value::InlineTable(t));
-        }
-        if let Some(s) = new.as_str() {
-            let mut t = InlineTable::new();
-            t.insert("version", Value::String(Formatted::new(s.to_string())));
-            new = Item::Value(Value::InlineTable(t));
-        }
-
-        let mut old = old.as_inline_table_mut().context("not a table")?;
-        let mut new = new.as_inline_table_mut().context("not a table")?;
-
-        InlineTable::fmt(&mut old);
-        old.sort_values();
-        InlineTable::fmt(&mut new);
-        new.sort_values();
-
-        if old.to_string() != new.to_string() {
-            ret.push(name.to_string());
-        }
-    }
-
-    Ok(ret)
-}
-
-pub fn manifest_changed(
-    _workspace: &Workspace,
-    root_changes: &Vec<String>,
-    root: &Path,
-    path: &str,
-    from: &str,
-    to: &str,
-) -> Result<BumpKind> {
+pub fn manifest_changed(root: &Path, path: &str, from: &str, to: &str) -> Result<BumpKind> {
     let new = get_file(root, path, to)?;
     let old = if let Ok(old) = get_file(root, path, from) {
         old
@@ -292,18 +232,10 @@ pub fn manifest_changed(
     let mut old = toml_edit::DocumentMut::from_str(&old)?;
     let mut new = toml_edit::DocumentMut::from_str(&new)?;
 
-    let old_deps = old.remove("dependencies").unwrap_or_default();
-    let new_deps = new.remove("dependencies").unwrap_or_default();
-
-    //let mut changes = BTreeMap::new();
-    //manifest_deps_changed(workspace, &mut changes, &old_deps, &new_deps)?;
-    //if let Some(bump) = changes.iter().max() {
-    //    return Ok(*bump.1);
-    //}
-
     for c in [&mut old, &mut new] {
         c.remove("build-dependencies");
         c.remove("dev-dependencies");
+        c.remove("dependencies");
 
         let package = c.get_mut("package").unwrap().as_table_mut().unwrap();
         package.remove("version");

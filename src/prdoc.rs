@@ -6,19 +6,16 @@ use std::path::Path;
 use std::str::FromStr;
 
 use anyhow::{bail, Context, Result};
-use cargo::core::{manifest, Workspace};
-use semver::{Version, VersionReq};
+use cargo::core::Workspace;
+use semver::VersionReq;
 use termcolor::{Color, ColorSpec, WriteColor};
-use toml_edit::{Formatted, InlineTable, Item, Table, Value};
+use toml_edit::{Formatted, Item, Table, Value};
 
-use crate::changed::{
-    find_indirect_changes, get_changed_crates, manifest_changed, Change, ChangeKind,
-};
+use crate::changed::{find_indirect_changes, get_changed_crates, Change, ChangeKind};
 use crate::cli::{Args, Prdoc, Semver};
 use crate::plan::BumpKind;
 use crate::public_api::{self, print_diff};
 use crate::shared::read_stdin;
-use crate::workspace;
 
 #[derive(serde::Deserialize)]
 struct Document {
@@ -148,7 +145,11 @@ pub fn handle_prdoc(args: Args, mut prdoc: Prdoc) -> Result<()> {
     Ok(())
 }
 
-pub fn manifest_deps_changed(workspace: &Workspace, old: &Path, new: &Path) -> Result<Vec<Change>> {
+pub fn manifest_deps_changed(
+    workspace: &Workspace,
+    old: &Path,
+    _new: &Path,
+) -> Result<Vec<Change>> {
     let mut changes = Vec::new();
     let old_workspace = Workspace::new(&old.join("Cargo.toml"), workspace.gctx())?;
     let old_root =
@@ -209,7 +210,7 @@ fn compare_deps(
         .unwrap_or(&t);
 
     for (name, _) in deps {
-        let (old_pkg, old_dep, old_root_dep) = get_dep(workspace, name, old, old_root)?;
+        let (_old_pkg, old_dep, old_root_dep) = get_dep(workspace, name, old, old_root)?;
         let (new_pkg, new_dep, new_root_dep) = get_dep(workspace, name, new, new_root)?;
 
         if workspace.members().any(|c| c.name() == new_pkg.as_str()) {
@@ -369,33 +370,34 @@ fn validate(args: &Args, prdoc: &Prdoc, w: &Workspace) -> Result<()> {
     let max_bump = prdoc.max_bump;
 
     writeln!(stdout, "checking file changes...")?;
-    let changes = get_changed_crates(w, false, from, "HEAD")?;
+    let mut changes = get_changed_crates(w, false, from, "HEAD")?;
     let mut ok = true;
+
+    let mut crates = prdocs
+        .iter()
+        .map(|p| p.name.clone())
+        //.chain(changes.iter().map(|c| c.name.clone()))
+        .collect::<Vec<_>>();
+    crates.sort();
+    crates.dedup();
+    let breaking = Semver {
+        paths: 0,
+        quiet: true,
+        major: false,
+        verbose: false,
+        minimum_nightly_rust_version: false,
+        since: Some(from.clone()),
+        crates,
+        toolchain: prdoc.toolchain.clone(),
+    };
+
+    let (tmp, upstreams) = public_api::get_from_commit(&w, &breaking, from)?;
+
+    writeln!(stdout, "checking dep changes...")?;
+    let dep_changes = manifest_deps_changed(w, tmp.path(), w.root())?;
 
     if !prdocs.is_empty() {
         writeln!(stdout, "checking semver changes...")?;
-        let mut crates = prdocs
-            .iter()
-            .map(|p| p.name.clone())
-            .chain(changes.iter().map(|c| c.name.clone()))
-            .collect::<Vec<_>>();
-        crates.sort();
-        crates.dedup();
-        let breaking = Semver {
-            paths: 0,
-            quiet: true,
-            major: false,
-            verbose: false,
-            minimum_nightly_rust_version: false,
-            since: Some(from.clone()),
-            crates,
-            toolchain: prdoc.toolchain.clone(),
-        };
-        let (tmp, upstreams) = public_api::get_from_commit(&w, &breaking, from)?;
-
-        writeln!(stdout, "checking dep changes...")?;
-        let dep_changes = manifest_deps_changed(w, w.root(), tmp.path())?;
-
         let breaking = public_api::get_changes(args, w, upstreams, &breaking, !prdoc.verbose)?;
 
         writeln!(stdout)?;
@@ -485,6 +487,8 @@ fn validate(args: &Args, prdoc: &Prdoc, w: &Workspace) -> Result<()> {
         }
     }
 
+    changes.extend(dep_changes);
+    changes.dedup_by(|a, b| a.name == b.name);
     for change in &changes {
         if prdocs.iter().any(|p| p.name == change.name) {
             continue;
@@ -502,7 +506,7 @@ fn validate(args: &Args, prdoc: &Prdoc, w: &Workspace) -> Result<()> {
                 stdout,
                 "    Cargo.toml changed but crate not listed in PR Doc"
             )?,
-            _ => (),
+            ChangeKind::Dependency => writeln!(stdout, "    Dependency changed")?,
         }
         ok = false;
         writeln!(stdout)?;

@@ -8,7 +8,9 @@ use anyhow::{bail, Context, Result};
 use cargo::core::Workspace;
 use termcolor::{Color, ColorSpec, WriteColor};
 
-use crate::changed::{find_indirect_changes, get_changed_crates, Change, ChangeKind};
+use crate::changed::{
+    find_indirect_changes, get_changed_crates, manifest_changed, Change, ChangeKind,
+};
 use crate::cli::{Args, Prdoc, Semver};
 use crate::plan::BumpKind;
 use crate::public_api::{self, print_diff};
@@ -97,6 +99,7 @@ fn read_prdoc(
             path: path.into(),
             kind,
             bump,
+            manifest_changed: false,
         });
         entry.bump = entry.bump.max(bump);
     })
@@ -207,8 +210,16 @@ fn validate(args: &Args, prdoc: &Prdoc, w: &Workspace) -> Result<()> {
                 }
             });
 
-            if prdoc.bump == predicted
-                || (prdoc.bump == BumpKind::None && predicted == BumpKind::Patch)
+            let manifest_changed = manifest_changed(
+                w.root(),
+                prdoc.path.join("Cargo.toml").to_str().unwrap(),
+                from,
+                "HEAD",
+            )?;
+
+            if manifest_changed == BumpKind::None
+                && (prdoc.bump == predicted
+                    || (prdoc.bump == BumpKind::None && predicted == BumpKind::Patch))
             {
                 continue;
             }
@@ -225,6 +236,13 @@ fn validate(args: &Args, prdoc: &Prdoc, w: &Workspace) -> Result<()> {
             stdout.set_color(ColorSpec::new().set_bold(true))?;
             writeln!(stdout, "{}", predicted)?;
             stdout.set_color(ColorSpec::new().set_bold(false))?;
+            if manifest_changed != BumpKind::None {
+                writeln!(stdout, "    Cargo.toml changed: If any dependencies that appear in the public api were major bumped")?;
+                writeln!(
+                    stdout,
+                    "                        then this PR Doc should be labeled a major change"
+                )?;
+            }
 
             if let Some(max_allowed_bump) = max_bump {
                 let prdoc_bad = prdoc.bump > max_allowed_bump;

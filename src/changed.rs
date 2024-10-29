@@ -21,6 +21,7 @@ pub struct Change {
     pub path: PathBuf,
     pub kind: ChangeKind,
     pub bump: BumpKind,
+    pub manifest_changed: bool,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -137,6 +138,7 @@ pub fn find_indirect_changes(w: &Workspace, changed: &mut Vec<Change>) {
                 path: path.to_path_buf(),
                 kind: ChangeKind::Dependency,
                 bump: BumpKind::Major,
+                manifest_changed: false,
             };
             changed.push(change);
         }
@@ -164,22 +166,20 @@ pub fn get_changed_crates(w: &Workspace, deps: bool, from: &str, to: &str) -> Re
 
         src_files.retain(|f| changed_files.contains(f));
 
-        if src_files.len() == 1 && src_files[0].ends_with("/Cargo.toml") {
-            if manifest_changed(w.root(), &src_files[0], from, to)? {
-                let change = Change {
-                    name: c.name().to_string(),
-                    path: path.to_path_buf(),
-                    kind: ChangeKind::Manifest,
-                    bump: BumpKind::Major,
-                };
-                changed.push(change);
-            }
-        } else if !src_files.is_empty() {
+        let manifest_changed =
+            if let Some(f) = src_files.iter().find(|f| f.ends_with("/Cargo.toml")) {
+                manifest_changed(w.root(), f, from, to)? != BumpKind::None
+            } else {
+                false
+            };
+
+        if !src_files.is_empty() {
             let change = Change {
                 name: c.name().to_string(),
                 path: path.to_path_buf(),
                 kind: ChangeKind::Files,
                 bump: BumpKind::Major,
+                manifest_changed,
             };
             changed.push(change);
         }
@@ -200,7 +200,7 @@ pub fn get_changed_crates(w: &Workspace, deps: bool, from: &str, to: &str) -> Re
     Ok(changed)
 }
 
-fn manifest_changed(root: &Path, path: &str, from: &str, to: &str) -> Result<bool> {
+pub fn manifest_changed(root: &Path, path: &str, from: &str, to: &str) -> Result<BumpKind> {
     struct Sorter;
 
     impl VisitMut for Sorter {
@@ -225,14 +225,13 @@ fn manifest_changed(root: &Path, path: &str, from: &str, to: &str) -> Result<boo
     let old = if let Ok(old) = get_file(root, path, from) {
         old
     } else {
-        return Ok(false);
+        return Ok(BumpKind::None);
     };
 
     let mut old = toml_edit::DocumentMut::from_str(&old)?;
     let mut new = toml_edit::DocumentMut::from_str(&new)?;
 
     for c in [&mut old, &mut new] {
-        c.remove("dependencies");
         c.remove("build-dependencies");
         c.remove("dev-dependencies");
 
@@ -246,7 +245,11 @@ fn manifest_changed(root: &Path, path: &str, from: &str, to: &str) -> Result<boo
     }
 
     let changed = old.to_string() != new.to_string();
-    Ok(changed)
+    if changed {
+        Ok(BumpKind::Major)
+    } else {
+        Ok(BumpKind::None)
+    }
 }
 
 fn get_file(root: &Path, path: &str, r: &str) -> Result<String> {

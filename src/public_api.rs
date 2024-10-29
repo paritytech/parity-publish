@@ -194,6 +194,16 @@ fn get_from_last_release(
     Ok(upstreams)
 }
 
+pub fn get_workspace_changes(
+    args: &Args,
+    workspace: &Workspace<'_>,
+    upstreams: Vec<cargo::core::Package>,
+    breaking: &Semver,
+    silent: bool,
+) -> Result<Vec<Change>> {
+    todo!()
+}
+
 pub fn get_changes(
     args: &Args,
     workspace: &Workspace<'_>,

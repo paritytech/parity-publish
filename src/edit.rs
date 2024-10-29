@@ -1,8 +1,9 @@
+use std::collections::BTreeMap;
 use std::fs::read_to_string;
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use cargo::core::{FeatureValue, Workspace};
+use cargo::core::{FeatureValue, Package, Workspace};
 use cargo::util::toml_mut::dependency::{Dependency, RegistrySource};
 use cargo::util::toml_mut::manifest::LocalManifest;
 use cargo::{core::dependency::DepKind, util::toml_mut::dependency::PathSource};
@@ -10,14 +11,17 @@ use semver::Version;
 use toml_edit::{DocumentMut, Formatted};
 
 use crate::plan::{Planner, RemoveCrate, RemoveDep, RemoveFeature, RewriteDep};
+use crate::workspace;
 
 pub fn rewrite_workspace_dep(
-    _workspace_path: &Path,
+    workspace_path: &Path,
     plan: &Planner,
     root_manifest: &mut DocumentMut,
+    workspace_crates: &BTreeMap<&str, &Package>,
     dep: &RewriteDep,
     cdep: &mut Dependency,
     dev: bool,
+    use_registry: bool,
 ) -> Result<()> {
     let wdeps = root_manifest
         .get_mut("workspace")
@@ -58,6 +62,19 @@ pub fn rewrite_workspace_dep(
         }
     } else {
         let wdep = wdep.as_inline_table_mut().unwrap();
+        let name = wdep
+            .get("package")
+            .map(|d| d.as_str().unwrap())
+            .unwrap_or_else(|| &dep.name);
+        if use_registry {
+            let _ = wdep.remove("path");
+        } else if let Some(pkg) = workspace_crates.get(name) {
+            let path = pkg.root().strip_prefix(workspace_path).unwrap();
+            wdep.insert(
+                "path",
+                toml_edit::Value::String(Formatted::new(path.to_str().unwrap().to_string())),
+            );
+        }
         wdep.insert("version", toml_edit::Value::String(Formatted::new(new_ver)));
         wdep.fmt();
     }
@@ -69,7 +86,9 @@ pub fn rewrite_deps(
     plan: &Planner,
     root_manifest: &mut DocumentMut,
     manifest: &mut LocalManifest,
+    workspace_crates: &BTreeMap<&str, &Package>,
     deps: &[RewriteDep],
+    use_registry: bool,
 ) -> Result<()> {
     for dep in deps {
         let exisiting_deps = manifest
@@ -96,9 +115,11 @@ pub fn rewrite_deps(
                         workspace_path,
                         plan,
                         root_manifest,
+                        workspace_crates,
                         dep,
                         &mut existing_dep,
                         dev,
+                        use_registry,
                     )?;
                     manifest.insert_into_table(&table, &existing_dep)?;
                     continue;
@@ -118,17 +139,24 @@ pub fn rewrite_deps(
                     new_ver = format!("={}", new_ver);
                 }
 
-                if let Some(path) = &dep.path {
-                    let path = workspace_path.canonicalize()?.join(path);
-                    let mut source = PathSource::new(&path);
-
-                    if dev {
-                        existing_dep = existing_dep.clear_version();
+                if let Some(pkg) = workspace_crates.get(existing_dep.name.as_str()) {
+                    if use_registry {
+                        let source = RegistrySource::new(&new_ver);
+                        let existing_dep = existing_dep.set_source(source);
+                        manifest.insert_into_table(&table, &existing_dep)?;
                     } else {
-                        source = source.set_version(&new_ver);
+                        let path = pkg.root();
+                        let path = workspace_path.canonicalize()?.join(path);
+                        let mut source = PathSource::new(&path);
+
+                        if dev {
+                            existing_dep = existing_dep.clear_version();
+                        } else {
+                            source = source.set_version(&new_ver);
+                        }
+                        let existing_dep = existing_dep.set_source(source);
+                        manifest.insert_into_table(&table, &existing_dep)?;
                     }
-                    let existing_dep = existing_dep.set_source(source);
-                    manifest.insert_into_table(&table, &existing_dep)?;
                 } else {
                     let source = RegistrySource::new(&new_ver);
                     let existing_dep = existing_dep.set_source(source);

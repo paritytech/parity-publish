@@ -87,7 +87,9 @@ pub async fn handle_apply(args: Args, apply: Apply) -> Result<()> {
             &plan,
             &mut root_manifest,
             &mut manifest,
+            &workspace_crates,
             &pkg.rewrite_dep,
+            apply.registry,
         )?;
 
         for remove_feature in &pkg.remove_feature {

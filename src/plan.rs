@@ -708,17 +708,7 @@ fn rewrite_deps(
     let mut rewrite = Vec::new();
 
     for dep in cra.dependencies() {
-        if dep.source_id().is_path() {
-            let dep_crate = workspace_crates
-                .get(dep.package_name().as_str())
-                .with_context(|| {
-                    format!(
-                        "dependency '{}' in crate '{}' is not part of the workspace",
-                        dep.package_name(),
-                        cra.name(),
-                    )
-                })?;
-
+        if let Some(dep_crate) = workspace_crates.get(dep.package_name().as_str()) {
             rewrite.push(RewriteDep {
                 name: dep.name_in_toml().to_string(),
                 version: None,

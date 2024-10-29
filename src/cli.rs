@@ -249,6 +249,9 @@ pub struct Apply {
     /// Don't verify packages before publish
     #[arg(long)]
     pub no_verify: bool,
+    /// Use registry for dependencies instead of local paths
+    #[arg(long)]
+    pub registry: bool,
 }
 
 #[derive(Parser, Debug)]

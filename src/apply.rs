@@ -88,6 +88,7 @@ pub async fn handle_apply(args: Args, apply: Apply) -> Result<()> {
             &mut root_manifest,
             &mut manifest,
             &workspace_crates,
+            &upstream,
             &pkg.rewrite_dep,
             apply.registry,
         )?;

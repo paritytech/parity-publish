@@ -4,20 +4,21 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 use cargo::core::{FeatureValue, Package, Workspace};
+use cargo::sources::IndexSummary;
 use cargo::util::toml_mut::dependency::{Dependency, RegistrySource};
 use cargo::util::toml_mut::manifest::LocalManifest;
 use cargo::{core::dependency::DepKind, util::toml_mut::dependency::PathSource};
-use semver::Version;
+use semver::{Version, VersionReq};
 use toml_edit::{DocumentMut, Formatted};
 
 use crate::plan::{Planner, RemoveCrate, RemoveDep, RemoveFeature, RewriteDep};
-use crate::workspace;
 
 pub fn rewrite_workspace_dep(
     workspace_path: &Path,
     plan: &Planner,
     root_manifest: &mut DocumentMut,
     workspace_crates: &BTreeMap<&str, &Package>,
+    upstream: &BTreeMap<String, Vec<IndexSummary>>,
     dep: &RewriteDep,
     cdep: &mut Dependency,
     dev: bool,
@@ -66,14 +67,23 @@ pub fn rewrite_workspace_dep(
             .get("package")
             .map(|d| d.as_str().unwrap())
             .unwrap_or_else(|| &dep.name);
-        if use_registry {
-            let _ = wdep.remove("path");
-        } else if let Some(pkg) = workspace_crates.get(name) {
-            let path = pkg.root().strip_prefix(workspace_path).unwrap();
-            wdep.insert(
-                "path",
-                toml_edit::Value::String(Formatted::new(path.to_str().unwrap().to_string())),
-            );
+        let ver = VersionReq::parse(&new_ver).unwrap();
+        if let Some(pkg) = workspace_crates.get(name) {
+            if pkg.publish().is_none()
+                && use_registry
+                && upstream
+                    .get(name)
+                    .and_then(|d| d.iter().find(|d| ver.matches(d.as_summary().version())))
+                    .is_some()
+            {
+                let _ = wdep.remove("path");
+            } else {
+                let path = pkg.root().strip_prefix(workspace_path).unwrap();
+                wdep.insert(
+                    "path",
+                    toml_edit::Value::String(Formatted::new(path.to_str().unwrap().to_string())),
+                );
+            }
         }
         wdep.insert("version", toml_edit::Value::String(Formatted::new(new_ver)));
         wdep.fmt();
@@ -87,6 +97,7 @@ pub fn rewrite_deps(
     root_manifest: &mut DocumentMut,
     manifest: &mut LocalManifest,
     workspace_crates: &BTreeMap<&str, &Package>,
+    upstream: &BTreeMap<String, Vec<IndexSummary>>,
     deps: &[RewriteDep],
     use_registry: bool,
 ) -> Result<()> {
@@ -116,6 +127,7 @@ pub fn rewrite_deps(
                         plan,
                         root_manifest,
                         workspace_crates,
+                        upstream,
                         dep,
                         &mut existing_dep,
                         dev,
@@ -140,7 +152,14 @@ pub fn rewrite_deps(
                 }
 
                 if let Some(pkg) = workspace_crates.get(existing_dep.name.as_str()) {
-                    if use_registry {
+                    let ver = VersionReq::parse(&new_ver).unwrap();
+                    if pkg.publish().is_none()
+                        && use_registry
+                        && upstream
+                            .get(existing_dep.name.as_str())
+                            .and_then(|d| d.iter().find(|d| ver.matches(d.as_summary().version())))
+                            .is_some()
+                    {
                         let source = RegistrySource::new(&new_ver);
                         let existing_dep = existing_dep.set_source(source);
                         manifest.insert_into_table(&table, &existing_dep)?;

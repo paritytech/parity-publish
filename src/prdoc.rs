@@ -236,7 +236,7 @@ fn validate(args: &Args, prdoc: &Prdoc, w: &Workspace) -> Result<()> {
             stdout.set_color(ColorSpec::new().set_bold(true))?;
             writeln!(stdout, "{}", predicted)?;
             stdout.set_color(ColorSpec::new().set_bold(false))?;
-            if manifest_changed != BumpKind::None {
+            if manifest_changed != BumpKind::None && predicted != BumpKind::Major {
                 writeln!(stdout, "    Cargo.toml changed: If any dependencies that appear in the public api were major bumped")?;
                 writeln!(
                     stdout,

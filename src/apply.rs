@@ -50,6 +50,11 @@ pub async fn handle_apply(args: Args, apply: Apply) -> Result<()> {
     let mut plan: Planner = toml::from_str(&plan)?;
     expand_plan(&workspace, &workspace_crates, &mut plan, &upstream).await?;
 
+    if apply.print {
+        list(&path, &cargo_config, &plan)?;
+        return Ok(());
+    }
+
     let token = if apply.publish {
         env::var("PARITY_PUBLISH_CRATESIO_TOKEN")
             .context("PARITY_PUBLISH_CRATESIO_TOKEN must be set")?
@@ -109,6 +114,27 @@ pub async fn handle_apply(args: Args, apply: Apply) -> Result<()> {
     }
 
     publish(&args, &apply, &cargo_config, plan, &path, token)
+}
+
+fn list(
+    path: &std::path::PathBuf,
+    cargo_config: &cargo::GlobalContext,
+    plan: &Planner,
+) -> Result<(), anyhow::Error> {
+    let workspace = Workspace::new(&path.join("Cargo.toml"), cargo_config)?;
+    let _lock = cargo_config.acquire_package_cache_lock(CacheLockMode::DownloadExclusive)?;
+    let mut reg = registry::get_registry(&workspace)?;
+    registry::download_crates(&mut reg, &workspace, false)?;
+    Ok(
+        for c in plan
+            .crates
+            .iter()
+            .filter(|c| c.publish)
+            .filter(|c| !version_exists(&mut reg, &c.name, &c.to))
+        {
+            println!("{}@{}", c.name, c.to);
+        },
+    )
 }
 
 fn publish(

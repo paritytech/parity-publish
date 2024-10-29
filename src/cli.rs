@@ -252,6 +252,9 @@ pub struct Apply {
     /// Use registry for dependencies instead of local paths
     #[arg(long)]
     pub registry: bool,
+    /// Print packages that need publish
+    #[arg(long)]
+    pub print: bool,
 }
 
 #[derive(Parser, Debug)]

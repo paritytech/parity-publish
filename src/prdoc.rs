@@ -3,10 +3,13 @@ use std::env::current_dir;
 use std::fs::{read_dir, read_to_string};
 use std::io::Write;
 use std::path::Path;
+use std::str::FromStr;
 
 use anyhow::{bail, Context, Result};
-use cargo::core::Workspace;
+use cargo::core::{manifest, Workspace};
+use semver::{Version, VersionReq};
 use termcolor::{Color, ColorSpec, WriteColor};
+use toml_edit::{Formatted, InlineTable, Item, Table, Value};
 
 use crate::changed::{
     find_indirect_changes, get_changed_crates, manifest_changed, Change, ChangeKind,
@@ -15,6 +18,7 @@ use crate::cli::{Args, Prdoc, Semver};
 use crate::plan::BumpKind;
 use crate::public_api::{self, print_diff};
 use crate::shared::read_stdin;
+use crate::workspace;
 
 #[derive(serde::Deserialize)]
 struct Document {
@@ -144,6 +148,202 @@ pub fn handle_prdoc(args: Args, mut prdoc: Prdoc) -> Result<()> {
     Ok(())
 }
 
+pub fn manifest_deps_changed(workspace: &Workspace, old: &Path, new: &Path) -> Result<Vec<Change>> {
+    let mut changes = Vec::new();
+    let old_workspace = Workspace::new(&old.join("Cargo.toml"), workspace.gctx())?;
+    let old_root =
+        toml_edit::DocumentMut::from_str(&read_to_string(old_workspace.root_manifest())?)?;
+    let new_root = toml_edit::DocumentMut::from_str(&read_to_string(workspace.root_manifest())?)?;
+
+    for c in workspace.members() {
+        let Some(old_c) = old_workspace.members().find(|o| o.name() == c.name()) else {
+            let change = Change {
+                name: c.name().to_string(),
+                path: c
+                    .root()
+                    .strip_prefix(workspace.root())
+                    .unwrap()
+                    .to_path_buf(),
+                kind: ChangeKind::Files,
+                bump: BumpKind::Minor,
+            };
+            changes.push(change);
+            continue;
+        };
+        let new = toml_edit::DocumentMut::from_str(&read_to_string(c.manifest_path())?)?;
+        let old = toml_edit::DocumentMut::from_str(&read_to_string(old_c.manifest_path())?)?;
+
+        let bump = compare_deps(workspace, &old_root, &new_root, &old, &new)?;
+
+        if bump != BumpKind::None {
+            let change = Change {
+                name: c.name().to_string(),
+                path: c
+                    .root()
+                    .strip_prefix(workspace.root())
+                    .unwrap()
+                    .to_path_buf(),
+                kind: ChangeKind::Dependency,
+                bump,
+            };
+            changes.push(change);
+        }
+    }
+
+    Ok(changes)
+}
+
+fn compare_deps(
+    workspace: &Workspace,
+    old_root: &toml_edit::DocumentMut,
+    new_root: &toml_edit::DocumentMut,
+    old: &toml_edit::DocumentMut,
+    new: &toml_edit::DocumentMut,
+) -> Result<BumpKind> {
+    let t = Table::new();
+    let mut bump = BumpKind::None;
+
+    let deps = new
+        .get("dependencies")
+        .and_then(|d| d.as_table())
+        .unwrap_or(&t);
+
+    for (name, _) in deps {
+        let (old_pkg, old_dep, old_root_dep) = get_dep(workspace, name, old, old_root)?;
+        let (new_pkg, new_dep, new_root_dep) = get_dep(workspace, name, new, new_root)?;
+
+        if workspace.members().any(|c| c.name() == new_pkg.as_str()) {
+            continue;
+        }
+
+        let old_version = old_root_dep
+            .as_ref()
+            .and_then(|d| d.get("version"))
+            .and_then(|d| d.as_str())
+            .or_else(|| {
+                old_root_dep
+                    .as_ref()
+                    .and_then(|d| d.get("version"))
+                    .and_then(|d| d.as_str())
+            });
+
+        let new_version = new_root_dep
+            .as_ref()
+            .and_then(|d| d.get("version"))
+            .and_then(|d| d.as_str())
+            .map(|d| d.to_string())
+            .or_else(|| {
+                new_root_dep
+                    .as_ref()
+                    .and_then(|d| d.get("version"))
+                    .and_then(|d| d.as_str())
+                    .map(|d| d.to_string())
+            });
+
+        if old_version.is_some() != new_version.is_some() {
+            bump = bump.max(BumpKind::Minor);
+        }
+
+        let mut old_s = old_dep.clone();
+        old_s.sort_values();
+        Table::fmt(&mut old_s);
+
+        let mut new_s = new_dep.clone();
+        new_s.sort_values();
+        Table::fmt(&mut new_s);
+
+        if old_s.to_string() != new_s.to_string() {
+            bump = bump.max(BumpKind::Minor);
+        }
+
+        let mut old_s = old_root_dep.clone().unwrap_or(Table::new());
+        old_s.sort_values();
+        Table::fmt(&mut old_s);
+
+        let mut new_s = new_root_dep.unwrap_or(Table::new());
+        new_s.sort_values();
+        Table::fmt(&mut new_s);
+
+        if old_s.to_string() != new_s.to_string() {
+            bump = bump.max(BumpKind::Minor);
+        }
+
+        if let Some(old_version) = old_version {
+            if let Some(new_version) = new_version {
+                let old_version = VersionReq::parse(&old_version)?;
+                let new_version = VersionReq::parse(&new_version)?;
+                if old_version.comparators[0].major != new_version.comparators[0].major
+                    || (old_version.comparators[0].major == 0
+                        && old_version.comparators[0].minor != new_version.comparators[0].minor)
+                {
+                    return Ok(BumpKind::Major);
+                }
+            }
+        }
+    }
+
+    return Ok(bump);
+}
+
+fn get_dep<'a>(
+    _workspace: &Workspace,
+    name: &'a str,
+    manifest: &toml_edit::DocumentMut,
+    root_manifest: &toml_edit::DocumentMut,
+) -> Result<(String, Table, Option<Table>)> {
+    let dep = manifest
+        .get("dependencies")
+        .and_then(|d| d.as_table())
+        .and_then(|d| d.get(name))
+        .and_then(|d| {
+            d.as_str()
+                .map(|v| {
+                    let mut t = Table::new();
+                    t.insert(
+                        "version",
+                        Item::Value(Value::String(Formatted::new(v.to_string()))),
+                    );
+                    t
+                })
+                .or_else(|| {
+                    d.as_inline_table()
+                        .map(|d| d.clone().into_table())
+                        .or_else(|| d.clone().into_table().ok())
+                })
+        })
+        .context("no dep")?;
+    let root_dep = root_manifest
+        .get("workspace")
+        .and_then(|d| d.get("dependencies"))
+        .and_then(|d| d.as_table())
+        .and_then(|d| d.get(name))
+        .and_then(|d| {
+            d.as_str()
+                .map(|v| {
+                    let mut t = Table::new();
+                    t.insert(
+                        "version",
+                        Item::Value(Value::String(Formatted::new(v.to_string()))),
+                    );
+                    t
+                })
+                .or_else(|| {
+                    d.as_inline_table()
+                        .map(|d| d.clone().into_table())
+                        .or_else(|| d.clone().into_table().ok())
+                })
+        });
+
+    let pkg = root_dep
+        .as_ref()
+        .and_then(|d| d.get("package"))
+        .and_then(|d| d.as_str())
+        .or_else(|| dep.get("package").and_then(|d| d.as_str()))
+        .unwrap_or(name)
+        .to_string();
+    Ok((pkg, dep, root_dep))
+}
+
 fn validate(args: &Args, prdoc: &Prdoc, w: &Workspace) -> Result<()> {
     let mut stdout = args.stdout();
 
@@ -191,7 +391,10 @@ fn validate(args: &Args, prdoc: &Prdoc, w: &Workspace) -> Result<()> {
             crates,
             toolchain: prdoc.toolchain.clone(),
         };
-        let (_tmp, upstreams) = public_api::get_from_commit(&w, &breaking, from)?;
+        let (tmp, upstreams) = public_api::get_from_commit(&w, &breaking, from)?;
+
+        writeln!(stdout, "checking dep changes...")?;
+        let dep_changes = manifest_deps_changed(w, w.root(), tmp.path())?;
 
         let breaking = public_api::get_changes(args, w, upstreams, &breaking, !prdoc.verbose)?;
 
@@ -201,7 +404,7 @@ fn validate(args: &Args, prdoc: &Prdoc, w: &Workspace) -> Result<()> {
             let changed = changes.iter().any(|c| c.name == prdoc.name);
             let api_change = breaking.iter().find(|c| c.name == prdoc.name);
 
-            let predicted = api_change.map(|b| b.bump).unwrap_or_else(|| {
+            let mut predicted = api_change.map(|b| b.bump).unwrap_or_else(|| {
                 if changed {
                     BumpKind::Patch
                 } else {
@@ -209,17 +412,12 @@ fn validate(args: &Args, prdoc: &Prdoc, w: &Workspace) -> Result<()> {
                 }
             });
 
-            let manifest_changed = manifest_changed(
-                w,
-                w.root(),
-                prdoc.path.join("Cargo.toml").to_str().unwrap(),
-                from,
-                "HEAD",
-            )?;
+            if let Some(c) = dep_changes.iter().find(|c| c.name == prdoc.name) {
+                predicted = predicted.max(c.bump);
+            }
 
-            if manifest_changed == BumpKind::None
-                && (prdoc.bump == predicted
-                    || (prdoc.bump == BumpKind::None && predicted == BumpKind::Patch))
+            if prdoc.bump == predicted
+                || (prdoc.bump == BumpKind::None && predicted == BumpKind::Patch)
             {
                 continue;
             }
@@ -236,13 +434,6 @@ fn validate(args: &Args, prdoc: &Prdoc, w: &Workspace) -> Result<()> {
             stdout.set_color(ColorSpec::new().set_bold(true))?;
             writeln!(stdout, "{}", predicted)?;
             stdout.set_color(ColorSpec::new().set_bold(false))?;
-            if manifest_changed != BumpKind::None && predicted != BumpKind::Major {
-                writeln!(stdout, "    Cargo.toml changed: If any dependencies that appear in the public api were major bumped")?;
-                writeln!(
-                    stdout,
-                    "                        then this PR Doc should be labeled a major change"
-                )?;
-            }
 
             if let Some(max_allowed_bump) = max_bump {
                 let prdoc_bad = prdoc.bump > max_allowed_bump;

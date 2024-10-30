@@ -2,11 +2,11 @@ use std::collections::HashMap;
 use std::env::current_dir;
 use std::fs::{read_dir, read_to_string};
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use anyhow::{bail, Context, Result};
-use cargo::core::Workspace;
+use cargo::core::{Package, Workspace};
 use semver::VersionReq;
 use termcolor::{Color, ColorSpec, WriteColor};
 use toml_edit::{Formatted, Item, Table, Value};
@@ -16,6 +16,14 @@ use crate::cli::{Args, Prdoc, Semver};
 use crate::plan::BumpKind;
 use crate::public_api::{self, print_diff};
 use crate::shared::read_stdin;
+
+#[derive(Debug)]
+pub struct DepChange {
+    pub name: String,
+    pub path: PathBuf,
+    pub dep: String,
+    pub breaking: bool,
+}
 
 #[derive(serde::Deserialize)]
 struct Document {
@@ -149,7 +157,7 @@ pub fn manifest_deps_changed(
     workspace: &Workspace,
     old: &Path,
     _new: &Path,
-) -> Result<Vec<Change>> {
+) -> Result<Vec<DepChange>> {
     let mut changes = Vec::new();
     let old_workspace = Workspace::new(&old.join("Cargo.toml"), workspace.gctx())?;
     let old_root =
@@ -158,37 +166,12 @@ pub fn manifest_deps_changed(
 
     for c in workspace.members() {
         let Some(old_c) = old_workspace.members().find(|o| o.name() == c.name()) else {
-            let change = Change {
-                name: c.name().to_string(),
-                path: c
-                    .root()
-                    .strip_prefix(workspace.root())
-                    .unwrap()
-                    .to_path_buf(),
-                kind: ChangeKind::Files,
-                bump: BumpKind::Minor,
-            };
-            changes.push(change);
             continue;
         };
         let new = toml_edit::DocumentMut::from_str(&read_to_string(c.manifest_path())?)?;
         let old = toml_edit::DocumentMut::from_str(&read_to_string(old_c.manifest_path())?)?;
 
-        let bump = compare_deps(workspace, &old_root, &new_root, &old, &new)?;
-
-        if bump != BumpKind::None {
-            let change = Change {
-                name: c.name().to_string(),
-                path: c
-                    .root()
-                    .strip_prefix(workspace.root())
-                    .unwrap()
-                    .to_path_buf(),
-                kind: ChangeKind::Dependency,
-                bump,
-            };
-            changes.push(change);
-        }
+        compare_deps(workspace, &mut changes, c, &old_root, &new_root, &old, &new)?;
     }
 
     Ok(changes)
@@ -196,13 +179,14 @@ pub fn manifest_deps_changed(
 
 fn compare_deps(
     workspace: &Workspace,
+    changes: &mut Vec<DepChange>,
+    c: &Package,
     old_root: &toml_edit::DocumentMut,
     new_root: &toml_edit::DocumentMut,
     old: &toml_edit::DocumentMut,
     new: &toml_edit::DocumentMut,
-) -> Result<BumpKind> {
+) -> Result<()> {
     let t = Table::new();
-    let mut bump = BumpKind::None;
 
     let deps = new
         .get("dependencies")
@@ -241,8 +225,41 @@ fn compare_deps(
                     .map(|d| d.to_string())
             });
 
+        if let Some(old_version) = old_version {
+            if let Some(new_version) = &new_version {
+                let old_version = VersionReq::parse(&old_version)?;
+                let new_version = VersionReq::parse(&new_version)?;
+                if old_version.comparators[0].major != new_version.comparators[0].major
+                    || (old_version.comparators[0].major == 0
+                        && old_version.comparators[0].minor != new_version.comparators[0].minor)
+                {
+                    changes.push(DepChange {
+                        name: c.name().to_string(),
+                        path: c
+                            .root()
+                            .strip_prefix(workspace.root())
+                            .unwrap()
+                            .to_path_buf(),
+                        dep: name.to_string(),
+                        breaking: true,
+                    });
+                    continue;
+                }
+            }
+        }
+
         if old_version.is_some() != new_version.is_some() {
-            bump = bump.max(BumpKind::Minor);
+            changes.push(DepChange {
+                name: c.name().to_string(),
+                path: c
+                    .root()
+                    .strip_prefix(workspace.root())
+                    .unwrap()
+                    .to_path_buf(),
+                dep: name.to_string(),
+                breaking: false,
+            });
+            continue;
         }
 
         let mut old_s = old_dep.clone();
@@ -254,7 +271,17 @@ fn compare_deps(
         Table::fmt(&mut new_s);
 
         if old_s.to_string() != new_s.to_string() {
-            bump = bump.max(BumpKind::Minor);
+            changes.push(DepChange {
+                name: c.name().to_string(),
+                path: c
+                    .root()
+                    .strip_prefix(workspace.root())
+                    .unwrap()
+                    .to_path_buf(),
+                dep: name.to_string(),
+                breaking: false,
+            });
+            continue;
         }
 
         let mut old_s = old_root_dep.clone().unwrap_or(Table::new());
@@ -266,24 +293,21 @@ fn compare_deps(
         Table::fmt(&mut new_s);
 
         if old_s.to_string() != new_s.to_string() {
-            bump = bump.max(BumpKind::Minor);
-        }
-
-        if let Some(old_version) = old_version {
-            if let Some(new_version) = new_version {
-                let old_version = VersionReq::parse(&old_version)?;
-                let new_version = VersionReq::parse(&new_version)?;
-                if old_version.comparators[0].major != new_version.comparators[0].major
-                    || (old_version.comparators[0].major == 0
-                        && old_version.comparators[0].minor != new_version.comparators[0].minor)
-                {
-                    return Ok(BumpKind::Major);
-                }
-            }
+            changes.push(DepChange {
+                name: c.name().to_string(),
+                path: c
+                    .root()
+                    .strip_prefix(workspace.root())
+                    .unwrap()
+                    .to_path_buf(),
+                dep: name.to_string(),
+                breaking: false,
+            });
+            continue;
         }
     }
 
-    return Ok(bump);
+    Ok(())
 }
 
 fn get_dep<'a>(
@@ -398,7 +422,8 @@ fn validate(args: &Args, prdoc: &Prdoc, w: &Workspace) -> Result<()> {
 
     if !prdocs.is_empty() {
         writeln!(stdout, "checking semver changes...")?;
-        let breaking = public_api::get_changes(args, w, upstreams, &breaking, !prdoc.verbose)?;
+        let breaking =
+            public_api::get_changes(args, w, upstreams, &breaking, &dep_changes, prdoc.verbose)?;
 
         writeln!(stdout)?;
 
@@ -406,17 +431,13 @@ fn validate(args: &Args, prdoc: &Prdoc, w: &Workspace) -> Result<()> {
             let changed = changes.iter().any(|c| c.name == prdoc.name);
             let api_change = breaking.iter().find(|c| c.name == prdoc.name);
 
-            let mut predicted = api_change.map(|b| b.bump).unwrap_or_else(|| {
+            let predicted = api_change.map(|b| b.bump).unwrap_or_else(|| {
                 if changed {
                     BumpKind::Patch
                 } else {
                     BumpKind::None
                 }
             });
-
-            if let Some(c) = dep_changes.iter().find(|c| c.name == prdoc.name) {
-                predicted = predicted.max(c.bump);
-            }
 
             if prdoc.bump == predicted
                 || (prdoc.bump == BumpKind::None && predicted == BumpKind::Patch)
@@ -487,7 +508,17 @@ fn validate(args: &Args, prdoc: &Prdoc, w: &Workspace) -> Result<()> {
         }
     }
 
-    changes.extend(dep_changes);
+    for pkg in dep_changes {
+        if !changes.iter().any(|c| c.name == pkg.name) {
+            changes.push(Change {
+                name: pkg.name.clone(),
+                path: pkg.path.clone(),
+                kind: ChangeKind::Dependency,
+                bump: BumpKind::Minor,
+            });
+        }
+    }
+    //changes.extend(dep_changes);
     changes.dedup_by(|a, b| a.name == b.name);
     for change in &changes {
         if prdocs.iter().any(|p| p.name == change.name) {

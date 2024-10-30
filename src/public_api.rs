@@ -7,7 +7,7 @@ use cargo::{
 };
 use cargo_semver_checks::ReleaseType;
 use log::debug;
-use public_api::{diff::PublicApiDiff, PublicItem, MINIMUM_NIGHTLY_RUST_VERSION};
+use public_api::{diff::PublicApiDiff, tokens::Token, PublicItem, MINIMUM_NIGHTLY_RUST_VERSION};
 use std::{collections::HashSet, env::current_dir, path::PathBuf};
 use std::{io::Write, process::Command};
 use tempfile::TempDir;
@@ -17,6 +17,7 @@ use termcolor::{Color, WriteColor};
 use crate::{
     cli::{Args, Semver},
     plan::BumpKind,
+    prdoc::{manifest_deps_changed, DepChange},
     registry,
     shared::read_stdin,
 };
@@ -41,18 +42,23 @@ pub fn handle_public_api(args: Args, mut breaking: Semver) -> Result<()> {
     config.shell().set_verbosity(cargo::core::Verbosity::Quiet);
     let path = current_dir()?.join("Cargo.toml");
     let workspace = Workspace::new(&path, &config)?;
-    let _tmp;
+    let mut tmp = None;
 
     let upstreams = if let Some(commit) = &breaking.since {
-        let (tmp, upstream) = get_from_commit(&workspace, &breaking, commit)?;
-        _tmp = tmp;
+        let (t, upstream) = get_from_commit(&workspace, &breaking, commit)?;
+        tmp = Some(t);
         upstream
     } else {
         get_from_last_release(&args, &workspace, &breaking)?
     };
     writeln!(stderr, "building crates...",)?;
 
-    let changes = get_changes(&args, &workspace, upstreams, &breaking, true)?;
+    let dep_changes = if let Some(tmp) = &tmp {
+        manifest_deps_changed(&workspace, tmp.path(), workspace.root())?
+    } else {
+        Default::default()
+    };
+    let changes = get_changes(&args, &workspace, upstreams, &breaking, &dep_changes, true)?;
 
     for c in changes {
         if breaking.paths >= 2 {
@@ -199,6 +205,7 @@ pub fn get_changes(
     workspace: &Workspace<'_>,
     upstreams: Vec<cargo::core::Package>,
     breaking: &Semver,
+    dep_changes: &Vec<DepChange>,
     silent: bool,
 ) -> Result<Vec<Change>> {
     let mut changes = Vec::new();
@@ -236,7 +243,7 @@ pub fn get_changes(
         let json_path = json_path.with_extension("new");
 
         let new = cargo_semver_checks::Rustdoc::from_path(&json_path);
-        //let new_diff = public_api::Builder::from_rustdoc_json(&json_path).build()?;
+        let new_diff = public_api::Builder::from_rustdoc_json(&json_path).build()?;
         let mut new = cargo_semver_checks::Check::new(new);
 
         n += 1;
@@ -262,19 +269,49 @@ pub fn get_changes(
 
         let path = c.root().strip_prefix(workspace.root()).unwrap();
         let old = cargo_semver_checks::Rustdoc::from_path(&json_path);
-        //let old_diff = public_api::Builder::from_rustdoc_json(&json_path).build()?;
+        let old_diff = public_api::Builder::from_rustdoc_json(&json_path).build()?;
         let report = new
             .set_baseline(old)
             .check_release(&mut Default::default())?;
 
-        let report = report.crate_reports().first_key_value().unwrap().1;
-        //let diff = public_api::diff::PublicApiDiff::between(old_diff, new_diff);
+        let mut dep_bump = BumpKind::None;
 
-        let diff = PublicApiDiff {
-            removed: Default::default(),
-            changed: Default::default(),
-            added: Default::default(),
-        };
+        for change in dep_changes {
+            if change.name == c.name().as_str() {
+                dep_bump = BumpKind::Minor;
+
+                let mut old = old_diff
+                    .items()
+                    .flat_map(|i| i.tokens())
+                    .filter_map(|t| match t {
+                        Token::Identifier(t) => Some(t),
+                        _ => None,
+                    });
+                let mut new = new_diff
+                    .items()
+                    .flat_map(|i| i.tokens())
+                    .filter_map(|t| match t {
+                        Token::Identifier(t) => Some(t),
+                        _ => None,
+                    });
+
+                if old.any(|t| *t == change.dep) && new.any(|t| *t == change.dep) {
+                    if change.breaking {
+                        dep_bump = BumpKind::Major;
+                        break;
+                    }
+                }
+            }
+        }
+
+        let report = report.crate_reports().first_key_value().unwrap().1;
+        let diff = public_api::diff::PublicApiDiff::between(old_diff, new_diff);
+
+        //let diff = PublicApiDiff {
+        //    removed: Default::default(),
+        //    changed: Default::default(),
+        //    added: Default::default(),
+        //};
 
         let bump = match report.required_bump() {
             Some(ReleaseType::Major) => BumpKind::Major,
@@ -285,6 +322,8 @@ pub fn get_changes(
             None if !diff.added.is_empty() => BumpKind::Minor,
             None => BumpKind::None,
         };
+
+        let bump = bump.max(dep_bump);
 
         debug!("-- semver --");
         debug!("semver: {}", c.name());

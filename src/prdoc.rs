@@ -168,6 +168,9 @@ pub fn manifest_deps_changed(
         let Some(old_c) = old_workspace.members().find(|o| o.name() == c.name()) else {
             continue;
         };
+        if c.publish().is_some() {
+            continue;
+        }
         let new = toml_edit::DocumentMut::from_str(&read_to_string(c.manifest_path())?)?;
         let old = toml_edit::DocumentMut::from_str(&read_to_string(old_c.manifest_path())?)?;
 

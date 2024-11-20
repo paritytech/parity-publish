@@ -129,7 +129,14 @@ fn list(
         for c in plan
             .crates
             .iter()
-            .filter(|c| c.publish)
+            .filter(|c| {
+                workspace
+                    .members()
+                    .find(|m| m.name().as_str() == c.name)
+                    .unwrap()
+                    .publish()
+                    .is_none()
+            })
             .filter(|c| !version_exists(&mut reg, &c.name, &c.to))
         {
             println!("{}@{}", c.name, c.to);

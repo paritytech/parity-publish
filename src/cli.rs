@@ -32,7 +32,7 @@ impl Args {
         StandardStream::stdout(self.color)
     }
     pub fn stderr(&self) -> StandardStream {
-        StandardStream::stdout(self.color)
+        StandardStream::stderr(self.color)
     }
 }
 

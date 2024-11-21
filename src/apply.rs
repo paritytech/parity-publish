@@ -133,9 +133,8 @@ fn list(
                 workspace
                     .members()
                     .find(|m| m.name().as_str() == c.name)
-                    .unwrap()
-                    .publish()
-                    .is_none()
+                    .map(|m| m.publish().is_some())
+                    .unwrap_or(false)
             })
             .filter(|c| !version_exists(&mut reg, &c.name, &c.to))
         {

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::env::current_dir;
 use std::fs::{read_dir, read_to_string};
 use std::io::Write;
@@ -196,9 +196,31 @@ fn compare_deps(
         .and_then(|d| d.as_table())
         .unwrap_or(&t);
 
-    for (name, _) in deps {
-        let (_old_pkg, old_dep, old_root_dep) = get_dep(workspace, name, old, old_root)?;
-        let (new_pkg, new_dep, new_root_dep) = get_dep(workspace, name, new, new_root)?;
+    for name in deps.iter().map(|(name, _)| name).collect::<HashSet<_>>() {
+        let ((_old_pkg, old_dep, old_root_dep), (new_pkg, new_dep, new_root_dep)) = match (
+            get_dep(workspace, name, old, old_root),
+            get_dep(workspace, name, new, new_root),
+        ) {
+            (Err(_), Ok(_)) | (Ok(_), Err(_)) => {
+                // removed or added
+                changes.push(DepChange {
+                    name: c.name().to_string(),
+                    path: c
+                        .root()
+                        .strip_prefix(workspace.root())
+                        .unwrap()
+                        .to_path_buf(),
+                    dep: name.to_string(),
+                    breaking: false,
+                });
+                continue;
+            }
+            (Err(_), Err(_)) => {
+                // strange, not found in both?
+                continue;
+            }
+            (Ok(o), Ok(n)) => (o, n),
+        };
 
         if workspace.members().any(|c| c.name() == new_pkg.as_str()) {
             continue;

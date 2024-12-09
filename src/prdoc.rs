@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::env::current_dir;
 use std::fs::{read_dir, read_to_string};
 use std::io::Write;
@@ -196,7 +196,7 @@ fn compare_deps(
         .and_then(|d| d.as_table())
         .unwrap_or(&t);
 
-    for (name, _) in deps {
+    for name in deps.iter().map(|(name, _)| name).collect::<HashSet<_>>() {
         let (_old_pkg, old_dep, old_root_dep) = get_dep(workspace, name, old, old_root)?;
         let (new_pkg, new_dep, new_root_dep) = get_dep(workspace, name, new, new_root)?;
 

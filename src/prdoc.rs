@@ -217,7 +217,10 @@ fn compare_deps(
             }
             (Err(_), Err(_)) => {
                 // strange, not found in both?
-                continue;
+                return Err(anyhow::anyhow!(
+                    "Dependency with name: {name:?} not found neither in `old` nor `new` for package: {:?}, \
+                    please check if dependency renames is correctly handled, e.g. `foo = {version = \"1\", package = \"bar\"}`!"
+                ));
             }
             (Ok(o), Ok(n)) => (o, n),
         };

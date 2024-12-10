@@ -216,11 +216,8 @@ fn compare_deps(
                 continue;
             }
             (Err(_), Err(_)) => {
-                // strange, not found in both?
-                return Err(anyhow::anyhow!(
-                    "Dependency with name: {name:?} not found neither in `old` nor `new` for package: {c:?}, \
-                    please check if potential dependency renaming is correctly handled, e.g. `foo = {{version = \"1\", package = \"bar\"}}`!"
-                ));
+                // TODO: (https://github.com/paritytech/parity-publish/issues/44): investigate further, what is this case?
+                continue;
             }
             (Ok(o), Ok(n)) => (o, n),
         };

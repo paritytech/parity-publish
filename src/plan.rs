@@ -242,12 +242,17 @@ pub async fn get_upstream(
     writeln!(stderr, "looking up crates...",)?;
     registry::download_crates(&mut reg, workspace, true)?;
     for c in workspace.members().filter(|c| c.publish().is_none()) {
-        upstream.insert(
-            c.name().to_string(),
-            registry::get_crate(&mut reg, c.name()).unwrap(),
-        );
+        let idx_summaries = registry::get_crate(&mut reg, c.name());
+        // New crates (not published yet) should be handled gracefully as
+        // a summary can not be fetched for them from the registry.
+        if let Ok(summary) = idx_summaries {
+            upstream.insert(c.name().to_string(), summary);
+        }
+
         for dep in c.dependencies() {
             if dep.source_id().is_git() || dep.source_id().is_path() {
+                // Similarly, the same should happen for new crates that represent dependencies
+                // of member crates.
                 if let Ok(package) = registry::get_crate(&mut reg, dep.package_name()) {
                     upstream.insert(dep.package_name().to_string(), package);
                 }

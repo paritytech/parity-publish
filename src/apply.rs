@@ -211,7 +211,7 @@ fn publish(
         };
         cargo::ops::publish(&workspace, &opts)?;
 
-        writeln!(stdout, " ({}s)", (now - Instant::now()).as_secs())?;
+        writeln!(stdout, " ({}s)", (Instant::now() - now).as_secs())?;
 
         if iter.peek().is_some() {
             if let Some(delay) = now.add(wait).checked_duration_since(now) {

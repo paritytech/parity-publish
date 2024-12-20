@@ -9,7 +9,7 @@ license = "Apache-2.0"
 
 [dependencies]
 anyhow = "1.0.86"
-cargo = "0.81.0"
+cargo = "0.84.0"
 cargo-semver-checks = { version = "0.36.0", default-features = false, features = ["gix-curl"] }
 clap = { version = "4.5.12", features = ["derive"] }
 crates_io_api = "0.11.0"

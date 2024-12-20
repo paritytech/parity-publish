@@ -40,7 +40,7 @@ fn owns(args: &Args, cli: cli::Workspace, w: &Workspace) -> Result<()> {
             } else {
                 let mut src =
                     cargo::sources::PathSource::new(c.root(), c.package_id().source_id(), w.gctx());
-                src.update().unwrap();
+                src.load().unwrap();
                 let src_files = src.list_files(c)?;
                 src_files
                     .into_iter()

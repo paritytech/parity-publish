@@ -88,6 +88,7 @@ pub async fn handle_apply(args: Args, apply: Apply) -> Result<()> {
         }
 
         edit::rewrite_deps(
+            &workspace,
             &path,
             &plan,
             &mut root_manifest,

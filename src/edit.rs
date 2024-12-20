@@ -3,7 +3,7 @@ use std::fs::read_to_string;
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use cargo::core::{FeatureValue, Package, Workspace};
+use cargo::core::{FeatureValue, Features, Package, Workspace};
 use cargo::sources::IndexSummary;
 use cargo::util::toml_mut::dependency::{Dependency, RegistrySource};
 use cargo::util::toml_mut::manifest::LocalManifest;
@@ -93,6 +93,7 @@ pub fn rewrite_workspace_dep(
 }
 
 pub fn rewrite_deps(
+    workspace: &Workspace,
     workspace_path: &Path,
     plan: &Planner,
     root_manifest: &mut DocumentMut,
@@ -104,7 +105,7 @@ pub fn rewrite_deps(
 ) -> Result<()> {
     for dep in deps {
         let exisiting_deps = manifest
-            .get_dependency_versions(&dep.name)
+            .get_dependency_versions(&dep.name, workspace, &Features::default())
             .collect::<Vec<_>>();
 
         for exisiting_dep in exisiting_deps {
@@ -134,7 +135,13 @@ pub fn rewrite_deps(
                         dev,
                         use_registry,
                     )?;
-                    manifest.insert_into_table(&table, &existing_dep)?;
+                    manifest.insert_into_table(
+                        &table,
+                        &existing_dep,
+                        workspace.gctx(),
+                        workspace_path,
+                        &Features::default(),
+                    )?;
                     continue;
                 }
 
@@ -163,7 +170,13 @@ pub fn rewrite_deps(
                     {
                         let source = RegistrySource::new(&new_ver);
                         let existing_dep = existing_dep.set_source(source);
-                        manifest.insert_into_table(&table, &existing_dep)?;
+                        manifest.insert_into_table(
+                            &table,
+                            &existing_dep,
+                            workspace.gctx(),
+                            workspace_path,
+                            &Features::default(),
+                        )?;
                     } else {
                         let path = pkg.root();
                         let path = workspace_path.canonicalize()?.join(path);
@@ -175,12 +188,24 @@ pub fn rewrite_deps(
                             source = source.set_version(&new_ver);
                         }
                         let existing_dep = existing_dep.set_source(source);
-                        manifest.insert_into_table(&table, &existing_dep)?;
+                        manifest.insert_into_table(
+                            &table,
+                            &existing_dep,
+                            workspace.gctx(),
+                            workspace_path,
+                            &Features::default(),
+                        )?;
                     }
                 } else {
                     let source = RegistrySource::new(&new_ver);
                     let existing_dep = existing_dep.set_source(source);
-                    manifest.insert_into_table(&table, &existing_dep)?;
+                    manifest.insert_into_table(
+                        &table,
+                        &existing_dep,
+                        workspace.gctx(),
+                        workspace_path,
+                        &Features::default(),
+                    )?;
                 }
             }
         }
@@ -208,7 +233,7 @@ pub fn remove_dep_inner(
     let mut removed = Vec::new();
 
     let exiting_deps = manifest
-        .get_dependency_versions(&dep.name)
+        .get_dependency_versions(&dep.name, workspace, &Features::default())
         .collect::<Vec<_>>();
     for (table, dep) in exiting_deps {
         let table = table
@@ -327,7 +352,8 @@ pub fn remove_dep_feature_all(
         let mut remove = Vec::new();
         let mut manifest = LocalManifest::try_new(c.manifest_path())?;
 
-        for (table, dep) in manifest.get_dependency_versions(name) {
+        for (table, dep) in manifest.get_dependency_versions(name, workspace, &Features::default())
+        {
             if table.kind() == DepKind::Development {
                 continue;
             }

@@ -175,7 +175,7 @@ pub fn get_changed_crates(w: &Workspace, deps: bool, from: &str, to: &str) -> Re
 
         let path = c.root().strip_prefix(w.root()).unwrap();
         let mut src = cargo::sources::PathSource::new(c.root(), c.package_id().source_id(), config);
-        src.update().unwrap();
+        src.load().unwrap();
         let src_files = src.list_files(c).unwrap();
         let mut src_files = src_files
             .into_iter()

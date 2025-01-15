@@ -11,7 +11,6 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     env::{self, current_dir},
     io::Write,
-    ops::Add,
     path::Path,
     str::FromStr,
     thread,
@@ -216,7 +215,6 @@ fn publish(
 
         if iter.peek().is_some() {
             if let Some(delay) = (before + wait).checked_duration_since(after) {
-                writeln!(stdout, " (delay {}s)", delay.as_secs());
                 thread::sleep(delay);
             }
         }

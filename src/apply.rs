@@ -194,7 +194,7 @@ fn publish(
         n += 1;
 
         let wait = Duration::from_secs(60);
-        let now = Instant::now();
+        let before = Instant::now();
 
         let opts = PublishOpts {
             gctx: config,
@@ -211,10 +211,12 @@ fn publish(
         };
         cargo::ops::publish(&workspace, &opts)?;
 
-        writeln!(stdout, " ({}s)", (Instant::now() - now).as_secs())?;
+        let after = Instant::now();
+        writeln!(stdout, " ({}s)", (after - before).as_secs())?;
 
         if iter.peek().is_some() {
-            if let Some(delay) = now.add(wait).checked_duration_since(now) {
+            if let Some(delay) = (before + wait).checked_duration_since(after) {
+                writeln!(stdout, " (delay {}s)", delay.as_secs());
                 thread::sleep(delay);
             }
         }

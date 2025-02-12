@@ -87,7 +87,8 @@ fn read_prdoc(
     entries: &mut HashMap<String, Change>,
 ) -> Result<(), anyhow::Error> {
     let prdoc = read_to_string(path).context("failed to read prdoc")?;
-    let prdoc: Document = serde_yaml::from_str(&prdoc)?;
+    let prdoc: Document = serde_yaml::from_str(&prdoc)
+        .map_err(|e| anyhow::anyhow!("failed to parse prdoc {:?}: {}", path, e))?;
     Ok(for c in prdoc.crates {
         let Some(package) = workspace.members().find(|m| m.name().as_str() == c.name) else {
             continue;

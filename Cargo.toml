@@ -11,12 +11,14 @@ repository = "https://github.com/paritytech/parity-publish"
 [dependencies]
 anyhow = "1.0.86"
 cargo = "0.84.0"
-cargo-semver-checks = { version = "0.38.0", default-features = false, features = ["gix-curl"] }
+cargo-semver-checks = { version = "0.39.0", default-features = false, features = [
+	"gix-curl",
+] }
 clap = { version = "4.5.12", features = ["derive"] }
 crates_io_api = "0.11.0"
 futures = "0.3.30"
 log = "0.4.22"
-public-api = "0.40.0"
+public-api = "0.43.0"
 reqwest = "0.12.5"
 rustdoc-json = "0.9.4"
 semver = "1.0.24"

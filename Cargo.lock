@@ -474,12 +474,12 @@ dependencies = [
 
 [[package]]
 name = "cargo-manifest"
-version = "0.17.0"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b2ce2075c35e4b492b93e3d5dd1dd3670de553f15045595daef8164ed9a3751"
+checksum = "a1d8af896b707212cd0e99c112a78c9497dd32994192a463ed2f7419d29bd8c6"
 dependencies = [
  "serde",
- "thiserror 1.0.69",
+ "thiserror 2.0.15",
  "toml 0.8.23",
 ]
 
@@ -513,7 +513,7 @@ dependencies = [
  "atty",
  "bugreport",
  "cargo-config2",
- "cargo_metadata 0.21.0",
+ "cargo_metadata",
  "cargo_toml",
  "clap",
  "clap-cargo",
@@ -597,20 +597,6 @@ dependencies = [
 
 [[package]]
 name = "cargo_metadata"
-version = "0.18.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d886547e41f740c616ae73108f6eb70afe6d940c7bc697cb30f13daec073037"
-dependencies = [
- "camino",
- "cargo-platform 0.1.9",
- "semver",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
-]
-
-[[package]]
-name = "cargo_metadata"
 version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5cfca2aaa699835ba88faf58a06342a314a950d2b9686165e038286c30316868"
@@ -684,7 +670,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c6affd9fc8702a94172345c11fa913aa84601cd05e187af166dcd48deff27b8d"
 dependencies = [
  "anstyle",
- "cargo_metadata 0.21.0",
+ "cargo_metadata",
  "clap",
  "serde",
  "serde_json",
@@ -4642,12 +4628,12 @@ dependencies = [
 
 [[package]]
 name = "rustdoc-json"
-version = "0.9.4"
+version = "0.9.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9cba50605762dcbc2e103a3a8b195c83b6978aca443c7dd6699ed2971c213e5"
+checksum = "ab44348a3493c8a852182d0da3e6d92fe340dd099a745652f276ebbb2d34a330"
 dependencies = [
  "cargo-manifest",
- "cargo_metadata 0.18.1",
+ "cargo_metadata",
  "serde",
  "thiserror 2.0.15",
  "toml 0.8.23",
@@ -5694,7 +5680,7 @@ version = "43.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68a99b8aa65de13f3e159e20a199cf72447fe1895f8169a33d2bae66a38adbaa"
 dependencies = [
- "cargo_metadata 0.21.0",
+ "cargo_metadata",
  "cargo_toml",
  "indexmap",
  "rayon",
@@ -5710,7 +5696,7 @@ version = "45.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "261ec07a6f256c00a656c5537a475aa6f09e7727ca1696a7af647b6d251342f5"
 dependencies = [
- "cargo_metadata 0.21.0",
+ "cargo_metadata",
  "cargo_toml",
  "indexmap",
  "rayon",
@@ -5725,7 +5711,7 @@ version = "53.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d5e2cc352eec0de4e81c1cf47657022e9c1be8d084bcb859c3426e5f537737a9"
 dependencies = [
- "cargo_metadata 0.21.0",
+ "cargo_metadata",
  "cargo_toml",
  "indexmap",
  "rayon",
@@ -5740,7 +5726,7 @@ version = "55.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fa98bbea1fb4bcff81dae8d2b3155c4309516f9b29f336a1da24806059d5845a"
 dependencies = [
- "cargo_metadata 0.21.0",
+ "cargo_metadata",
  "cargo_toml",
  "indexmap",
  "rayon",
@@ -5784,7 +5770,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2851dc66286298097d48beec83cc9441bcfe973332f5a770dbb76ce1ded1f29"
 dependencies = [
  "anyhow",
- "cargo_metadata 0.21.0",
+ "cargo_metadata",
  "serde",
  "serde_json",
  "thiserror 2.0.15",

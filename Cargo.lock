@@ -4068,6 +4068,7 @@ dependencies = [
  "futures",
  "log",
  "public-api",
+ "rayon",
  "reqwest",
  "rustdoc-json",
  "semver",

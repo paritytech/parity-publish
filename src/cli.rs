@@ -235,7 +235,7 @@ pub struct Plan {
     pub crates: Vec<String>,
 }
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 pub struct Apply {
     /// Don't actually publish crates
     #[arg(long, short)]
@@ -255,6 +255,26 @@ pub struct Apply {
     /// Print packages that need publish
     #[arg(long)]
     pub print: bool,
+    /// Maximum number of crates to publish concurrently
+    #[arg(long, default_value = "3")]
+    pub max_concurrent: usize,
+    /// Delay between batches in seconds
+    #[arg(long, default_value = "120")]
+    pub batch_delay: u64,
+    /// Number of crates to process in each batch
+    #[arg(long, default_value = "10")]
+    pub batch_size: usize,
+    /// Number of batches to process in parallel (0 = sequential)
+    #[arg(long, default_value = "0")]
+    pub parallel_batches: usize,
+
+    /// Use staging registry (staging.crates.io) instead of production
+    #[arg(long)]
+    pub staging: bool,
+
+    /// Custom registry URL (overrides --staging if both specified)
+    #[arg(long)]
+    pub registry_url: Option<String>,
 }
 
 #[derive(Parser, Debug)]

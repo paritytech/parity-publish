@@ -32,3 +32,4 @@ toml = { version = "0.8.19", features = ["preserve_order"] }
 toml_edit = "0.22.20"
 #toml_edit_cargo = { version = "0.21.0", package = "toml_edit" }
 walkdir = "2.5.0"
+rayon = "1.10.0"

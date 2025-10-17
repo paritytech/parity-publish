@@ -1,10 +1,9 @@
 use crate::plan::BumpKind;
+use clap::{ArgAction, Parser};
 use std::{
     io::{stderr, stdout, IsTerminal},
     path::PathBuf,
 };
-
-use clap::{ArgAction, Parser};
 use termcolor::{ColorChoice, StandardStream};
 
 fn color(s: &str) -> Result<ColorChoice, &'static str> {
@@ -129,6 +128,9 @@ pub struct Semver {
     /// Rust toolchain to use
     #[arg(long, default_value = public_api::MINIMUM_NIGHTLY_RUST_VERSION)]
     pub toolchain: String,
+    /// Cargo build target dir
+    #[arg(long, default_value = "target")]
+    pub target_dir: PathBuf,
     /// Print the minimum nightly rust version needed for semver checks
     #[arg(long)]
     pub minimum_nightly_rust_version: bool,
@@ -166,6 +168,9 @@ pub struct Prdoc {
     /// Rust toolchain to use
     #[arg(long, default_value = public_api::MINIMUM_NIGHTLY_RUST_VERSION)]
     pub toolchain: String,
+    /// Cargo build target dir
+    #[arg(long, default_value = "target")]
+    pub target_dir: PathBuf,
     #[arg(default_values_t = Vec::<String>::new())]
     pub crates: Vec<String>,
     /// The maximum bump that is allowed for any crate to happen. Only checked if `validate` is set.

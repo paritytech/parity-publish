@@ -439,6 +439,7 @@ fn validate(args: &Args, prdoc: &Prdoc, w: &Workspace) -> Result<()> {
         since: Some(from.clone()),
         crates,
         toolchain: prdoc.toolchain.clone(),
+        target_dir: prdoc.target_dir.clone(),
     };
 
     let (tmp, upstreams) = public_api::get_from_commit(&w, &breaking, from)?;

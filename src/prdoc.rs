@@ -450,7 +450,7 @@ fn validate(args: &Args, prdoc: &Prdoc, w: &Workspace) -> Result<()> {
     if !prdocs.is_empty() {
         writeln!(stdout, "checking semver changes...")?;
         let breaking =
-            public_api::get_changes(args, w, upstreams, &breaking, &dep_changes, prdoc.verbose)?;
+            public_api::get_changes(args, w, upstreams, &breaking, &dep_changes, !prdoc.verbose)?;
 
         writeln!(stdout)?;
 

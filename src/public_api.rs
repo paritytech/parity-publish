@@ -234,7 +234,7 @@ pub fn get_changes(
         let json_path = rustdoc_json::Builder::default()
             .toolchain(&breaking.toolchain)
             .target_dir(&breaking.target_dir)
-            .quiet(true)
+            .quiet(silent)
             .silent(silent)
             .manifest_path(c.manifest_path())
             .build()?;
@@ -260,7 +260,7 @@ pub fn get_changes(
         let json_path = rustdoc_json::Builder::default()
             .toolchain(&breaking.toolchain)
             .target_dir(&breaking.target_dir.join("old"))
-            .quiet(true)
+            .quiet(silent)
             .silent(silent)
             .target_dir("target/old")
             .manifest_path(upstream.manifest_path())

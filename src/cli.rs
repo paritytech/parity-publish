@@ -150,7 +150,7 @@ pub struct Prdoc {
     /// Only print breaking changes
     #[arg(long, short)]
     pub major: bool,
-    /// Verbose output
+    /// Verbose output, also shows the output of rust doc builder
     #[arg(long, short)]
     pub verbose: bool,
     /// Only print crate names

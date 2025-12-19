@@ -128,7 +128,7 @@ fn write_manifest(name: &str) -> Result<PathBuf> {
 
 [package]
 name = "{}"
-description = "Reserved by Parity while we work on an official release"
+description = "Reserved by Midnight while we work on an official release"
 version = "0.0.0"
 license-file = "LICENSE"
 include = ["LICENSE", "/lib.rs"]

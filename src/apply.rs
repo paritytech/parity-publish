@@ -50,11 +50,9 @@ pub async fn handle_apply(args: Args, apply: Apply) -> Result<()> {
     let mut plan: Planner = toml::from_str(&plan)?;
     expand_plan(&workspace, &workspace_crates, &mut plan, &upstream).await?;
 
-    let must_use_local = if apply.registry {
-        compute_must_use_local(&workspace, &plan, &upstream)
-    } else {
-        BTreeSet::new()
-    };
+    let local_path_overrides = apply
+        .registry
+        .then(|| compute_must_use_local(&workspace, &plan, &upstream));
 
     if apply.print {
         list(&path, &cargo_config, &plan)?;
@@ -103,7 +101,7 @@ pub async fn handle_apply(args: Args, apply: Apply) -> Result<()> {
             &upstream,
             &pkg.rewrite_dep,
             apply.registry,
-            &must_use_local,
+            local_path_overrides.as_ref(),
         )?;
 
         for remove_feature in &pkg.remove_feature {

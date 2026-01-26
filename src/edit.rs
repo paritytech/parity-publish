@@ -23,7 +23,7 @@ pub fn rewrite_workspace_dep(
     cdep: &mut Dependency,
     dev: bool,
     use_registry: bool,
-    must_use_local: &BTreeSet<String>,
+    local_path_overrides: Option<&BTreeSet<String>>,
 ) -> Result<()> {
     let wdeps = root_manifest
         .get_mut("workspace")
@@ -73,7 +73,7 @@ pub fn rewrite_workspace_dep(
         if let Some(pkg) = workspace_crates.get(name) {
             if pkg.publish().is_none()
                 && use_registry
-                && !must_use_local.contains(name)
+                && !local_path_overrides.is_some_and(|s| s.contains(name))
                 && upstream
                     .get(name)
                     .and_then(|d| d.iter().find(|d| ver.matches(d.as_summary().version())))
@@ -104,7 +104,7 @@ pub fn rewrite_deps(
     upstream: &BTreeMap<String, Vec<IndexSummary>>,
     deps: &[RewriteDep],
     use_registry: bool,
-    must_use_local: &BTreeSet<String>,
+    local_path_overrides: Option<&BTreeSet<String>>,
 ) -> Result<()> {
     for dep in deps {
         let exisiting_deps = manifest
@@ -137,7 +137,7 @@ pub fn rewrite_deps(
                         &mut existing_dep,
                         dev,
                         use_registry,
-                        must_use_local,
+                        local_path_overrides,
                     )?;
                     manifest.insert_into_table(
                         &table,
@@ -167,7 +167,8 @@ pub fn rewrite_deps(
                     let ver = VersionReq::parse(&new_ver).unwrap();
                     if pkg.publish().is_none()
                         && use_registry
-                        && !must_use_local.contains(existing_dep.name.as_str())
+                        && !local_path_overrides
+                            .is_some_and(|s| s.contains(existing_dep.name.as_str()))
                         && upstream
                             .get(existing_dep.name.as_str())
                             .and_then(|d| d.iter().find(|d| ver.matches(d.as_summary().version())))

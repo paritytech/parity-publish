@@ -2,10 +2,11 @@ use anyhow::{Context, Result};
 use cargo::{
     core::{dependency::DepKind, resolver::CliFeatures, FeatureValue, Package, Workspace},
     ops::{Packages, PublishOpts},
+    sources::IndexSummary,
     util::{cache_lock::CacheLockMode, toml_mut::manifest::LocalManifest},
 };
 
-use semver::Version;
+use semver::{Version, VersionReq};
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -48,6 +49,12 @@ pub async fn handle_apply(args: Args, apply: Apply) -> Result<()> {
         .context("Can't find Plan.toml. Have your ran plan first?")?;
     let mut plan: Planner = toml::from_str(&plan)?;
     expand_plan(&workspace, &workspace_crates, &mut plan, &upstream).await?;
+
+    let must_use_local = if apply.registry {
+        compute_must_use_local(&workspace, &plan, &upstream)
+    } else {
+        BTreeSet::new()
+    };
 
     if apply.print {
         list(&path, &cargo_config, &plan)?;
@@ -96,6 +103,7 @@ pub async fn handle_apply(args: Args, apply: Apply) -> Result<()> {
             &upstream,
             &pkg.rewrite_dep,
             apply.registry,
+            &must_use_local,
         )?;
 
         for remove_feature in &pkg.remove_feature {
@@ -271,4 +279,62 @@ fn remove_dev_features(member: &Package) -> Vec<RemoveFeature> {
     }
 
     remove
+}
+
+/// Compute the transitive closure of crates that must use local paths.
+///
+/// A crate must use a local path if:
+/// 1. Its new version doesn't exist on crates.io, OR
+/// 2. It depends (transitively) on a crate that must use a local path
+fn compute_must_use_local(
+    workspace: &Workspace,
+    plan: &Planner,
+    upstream: &BTreeMap<String, Vec<IndexSummary>>,
+) -> BTreeSet<String> {
+    // Step 1: Find crates whose new version doesn't exist on crates.io
+    let mut must_use_local = BTreeSet::new();
+    for pkg in &plan.crates {
+        let ver = VersionReq::parse(&pkg.to).ok();
+        let has_upstream = ver.as_ref().and_then(|v| {
+            upstream.get(&pkg.name).and_then(|versions| {
+                versions
+                    .iter()
+                    .find(|u| v.matches(u.as_summary().version()))
+            })
+        });
+
+        if has_upstream.is_none() {
+            must_use_local.insert(pkg.name.clone());
+        }
+    }
+
+    // Step 2: Build reverse dependency graph (crate → dependents)
+    let mut dependents: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for member in workspace.members() {
+        let name = member.name().to_string();
+        for dep in member
+            .dependencies()
+            .iter()
+            .filter(|d| d.kind() != DepKind::Development)
+        {
+            dependents
+                .entry(dep.package_name().to_string())
+                .or_default()
+                .push(name.clone());
+        }
+    }
+
+    // Step 3: BFS to propagate to all transitive dependents
+    let mut queue: Vec<String> = must_use_local.iter().cloned().collect();
+    while let Some(crate_name) = queue.pop() {
+        if let Some(deps) = dependents.get(&crate_name) {
+            for dep in deps {
+                if must_use_local.insert(dep.clone()) {
+                    queue.push(dep.clone());
+                }
+            }
+        }
+    }
+
+    must_use_local
 }

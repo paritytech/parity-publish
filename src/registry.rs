@@ -7,7 +7,7 @@ use cargo::sources::IndexSummary;
 use cargo::{
     core::{Dependency, SourceId, Workspace},
     sources::RegistrySource,
-    util::interning::InternedString,
+    util::{cache_lock::CacheLockMode, interning::InternedString},
 };
 
 pub fn get_registry<'a>(workspace: &Workspace<'a>) -> Result<RegistrySource<'a>> {
@@ -53,4 +53,60 @@ pub fn download_crates(reg: &mut RegistrySource, workspace: &Workspace, deps: bo
 
     reg.block_until_ready()?;
     Ok(())
+}
+
+/// Check if a specific version of a crate exists in the registry.
+/// This creates a fresh registry source to ensure we get the latest index state.
+pub fn version_exists_fresh(
+    workspace: &Workspace,
+    name: &str,
+    version: &semver::Version,
+) -> Result<bool> {
+    let whitelist = workspace.members().map(|c| c.package_id()).collect();
+    let config = workspace.gctx();
+    let _lock = config.acquire_package_cache_lock(CacheLockMode::DownloadExclusive)?;
+
+    let mut reg = RegistrySource::remote(SourceId::crates_io(config)?, &whitelist, config)?;
+    reg.invalidate_cache();
+
+    let crates = get_crate(&mut reg, name.into());
+    reg.block_until_ready()?;
+
+    match crates {
+        Ok(c) => Ok(c.iter().any(|v| v.as_summary().version() == version)),
+        Err(_) => Ok(false),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use semver::Version;
+
+    #[test]
+    fn test_version_parsing() {
+        // Test that version parsing works as expected
+        let version = Version::parse("1.2.3").unwrap();
+        assert_eq!(version.major, 1);
+        assert_eq!(version.minor, 2);
+        assert_eq!(version.patch, 3);
+    }
+
+    #[test]
+    fn test_version_comparison() {
+        let v1 = Version::parse("1.0.0").unwrap();
+        let v2 = Version::parse("1.0.1").unwrap();
+        let v3 = Version::parse("1.0.0").unwrap();
+
+        assert!(v2 > v1);
+        assert_eq!(v1, v3);
+    }
+
+    #[test]
+    fn test_version_with_prerelease() {
+        let stable = Version::parse("1.0.0").unwrap();
+        let pre = Version::parse("1.0.0-alpha.1").unwrap();
+
+        // Pre-release versions are less than stable
+        assert!(pre < stable);
+    }
 }

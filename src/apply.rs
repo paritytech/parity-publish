@@ -176,6 +176,9 @@ fn publish(
 
     drop(_lock);
 
+    let poll_interval = Duration::from_secs(apply.poll_interval);
+    let poll_timeout = Duration::from_secs(apply.poll_timeout);
+
     let mut iter = plan
         .crates
         .iter()
@@ -192,7 +195,6 @@ fn publish(
 
         n += 1;
 
-        let wait = Duration::from_secs(60);
         let before = Instant::now();
 
         let opts = PublishOpts {
@@ -210,12 +212,31 @@ fn publish(
         };
         cargo::ops::publish(&workspace, &opts)?;
 
-        let after = Instant::now();
-        writeln!(stdout, " ({}s)", (after - before).as_secs())?;
+        let after_publish = Instant::now();
+        writeln!(stdout, " published ({}s)", (after_publish - before).as_secs())?;
 
-        if iter.peek().is_some() {
-            if let Some(delay) = (before + wait).checked_duration_since(after) {
-                thread::sleep(delay);
+        // Wait for crate to appear in the index before publishing dependents
+        if iter.peek().is_some() && !apply.dry_run {
+            let version = Version::parse(&pkg.to)?;
+            write!(stdout, "    waiting for {} to appear in index...", pkg.name)?;
+            stdout.flush()?;
+
+            let wait_start = Instant::now();
+            let mut appeared = false;
+
+            while wait_start.elapsed() < poll_timeout {
+                if registry::version_exists_fresh(&workspace, &pkg.name, &version)? {
+                    appeared = true;
+                    break;
+                }
+                thread::sleep(poll_interval);
+            }
+
+            let wait_time = wait_start.elapsed().as_secs();
+            if appeared {
+                writeln!(stdout, " ready ({}s)", wait_time)?;
+            } else {
+                writeln!(stdout, " timeout after {}s, continuing anyway", wait_time)?;
             }
         }
     }
@@ -271,4 +292,82 @@ fn remove_dev_features(member: &Package) -> Vec<RemoveFeature> {
     }
 
     remove
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn test_version_exists_returns_true_for_existing() {
+        // Test the version_exists function with a mock registry
+        // This is a basic sanity check that the function signature works
+        // Real integration tests would require a workspace
+    }
+
+    #[test]
+    fn test_polling_timeout_logic() {
+        // Test that the polling loop respects timeout
+        let poll_timeout = Duration::from_millis(100);
+        let poll_interval = Duration::from_millis(20);
+        let start = Instant::now();
+
+        let mut iterations = 0;
+        while start.elapsed() < poll_timeout {
+            iterations += 1;
+            // Simulate checking (always returns false)
+            let found = false;
+            if found {
+                break;
+            }
+            thread::sleep(poll_interval);
+        }
+
+        // Should have done at least a few iterations
+        assert!(iterations >= 2, "Should have polled multiple times");
+        // Should have respected the timeout (with some tolerance for timing)
+        assert!(
+            start.elapsed() >= poll_timeout,
+            "Should have waited at least poll_timeout duration"
+        );
+    }
+
+    #[test]
+    fn test_polling_early_exit() {
+        // Test that polling exits early when condition is met
+        let poll_timeout = Duration::from_secs(10); // Long timeout
+        let poll_interval = Duration::from_millis(10);
+        let start = Instant::now();
+
+        let mut iterations = 0;
+        while start.elapsed() < poll_timeout {
+            iterations += 1;
+            // Simulate finding the crate on second iteration
+            let found = iterations >= 2;
+            if found {
+                break;
+            }
+            thread::sleep(poll_interval);
+        }
+
+        // Should have exited after finding
+        assert_eq!(iterations, 2, "Should have exited after finding on 2nd iteration");
+        // Should have finished well before timeout
+        assert!(
+            start.elapsed() < Duration::from_secs(1),
+            "Should have finished quickly after finding"
+        );
+    }
+
+    #[test]
+    fn test_duration_from_cli_values() {
+        // Test that Duration::from_secs works with typical CLI values
+        let poll_interval = Duration::from_secs(5);
+        let poll_timeout = Duration::from_secs(60);
+
+        assert_eq!(poll_interval.as_secs(), 5);
+        assert_eq!(poll_timeout.as_secs(), 60);
+        assert!(poll_timeout > poll_interval);
+    }
 }

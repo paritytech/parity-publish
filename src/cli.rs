@@ -260,6 +260,12 @@ pub struct Apply {
     /// Print packages that need publish
     #[arg(long)]
     pub print: bool,
+    /// Interval in seconds between polling for crate availability (default: 5)
+    #[arg(long, default_value = "5")]
+    pub poll_interval: u64,
+    /// Maximum time in seconds to wait for a crate to appear in the index (default: 60)
+    #[arg(long, default_value = "60")]
+    pub poll_timeout: u64,
 }
 
 #[derive(Parser, Debug)]
@@ -289,4 +295,99 @@ pub struct Config {
     #[arg(long)]
     /// Apply changes specified in Plan.config
     pub apply: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    #[test]
+    fn test_apply_default_poll_interval() {
+        let cli = Cli::try_parse_from(["parity-publish", "apply"]).unwrap();
+        if let Command::Apply(apply) = cli.comamnd {
+            assert_eq!(apply.poll_interval, 5, "Default poll_interval should be 5 seconds");
+        } else {
+            panic!("Expected Apply command");
+        }
+    }
+
+    #[test]
+    fn test_apply_default_poll_timeout() {
+        let cli = Cli::try_parse_from(["parity-publish", "apply"]).unwrap();
+        if let Command::Apply(apply) = cli.comamnd {
+            assert_eq!(apply.poll_timeout, 60, "Default poll_timeout should be 60 seconds");
+        } else {
+            panic!("Expected Apply command");
+        }
+    }
+
+    #[test]
+    fn test_apply_custom_poll_interval() {
+        let cli = Cli::try_parse_from(["parity-publish", "apply", "--poll-interval", "10"]).unwrap();
+        if let Command::Apply(apply) = cli.comamnd {
+            assert_eq!(apply.poll_interval, 10);
+        } else {
+            panic!("Expected Apply command");
+        }
+    }
+
+    #[test]
+    fn test_apply_custom_poll_timeout() {
+        let cli = Cli::try_parse_from(["parity-publish", "apply", "--poll-timeout", "120"]).unwrap();
+        if let Command::Apply(apply) = cli.comamnd {
+            assert_eq!(apply.poll_timeout, 120);
+        } else {
+            panic!("Expected Apply command");
+        }
+    }
+
+    #[test]
+    fn test_apply_both_poll_flags() {
+        let cli = Cli::try_parse_from([
+            "parity-publish",
+            "apply",
+            "--poll-interval", "3",
+            "--poll-timeout", "90",
+        ]).unwrap();
+        if let Command::Apply(apply) = cli.comamnd {
+            assert_eq!(apply.poll_interval, 3);
+            assert_eq!(apply.poll_timeout, 90);
+        } else {
+            panic!("Expected Apply command");
+        }
+    }
+
+    #[test]
+    fn test_apply_poll_flags_with_publish() {
+        let cli = Cli::try_parse_from([
+            "parity-publish",
+            "apply",
+            "--publish",
+            "--poll-interval", "2",
+        ]).unwrap();
+        if let Command::Apply(apply) = cli.comamnd {
+            assert!(apply.publish);
+            assert_eq!(apply.poll_interval, 2);
+        } else {
+            panic!("Expected Apply command");
+        }
+    }
+
+    #[test]
+    fn test_apply_invalid_poll_interval_rejected() {
+        let result = Cli::try_parse_from(["parity-publish", "apply", "--poll-interval", "abc"]);
+        assert!(result.is_err(), "Non-numeric poll-interval should be rejected");
+    }
+
+    #[test]
+    fn test_apply_zero_poll_interval_accepted() {
+        // Zero should be accepted (though not recommended)
+        let cli = Cli::try_parse_from(["parity-publish", "apply", "--poll-interval", "0"]).unwrap();
+        if let Command::Apply(apply) = cli.comamnd {
+            assert_eq!(apply.poll_interval, 0);
+        } else {
+            panic!("Expected Apply command");
+        }
+    }
 }

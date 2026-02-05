@@ -1,6 +1,6 @@
 [package]
 name = "parity-publish"
-version = "0.10.8"
+version = "0.10.9"
 edition = "2021"
 description = "A tool to manage publishing Parity's crates"
 license = "Apache-2.0"
@@ -9,26 +9,26 @@ repository = "https://github.com/paritytech/parity-publish"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.86"
-cargo = "0.85.0"
-cargo-semver-checks = { version = "0.43.0", default-features = false, features = [
+anyhow = "1.0.100"
+cargo = "0.94.0"
+cargo-semver-checks = { version = "0.46.0", default-features = false, features = [
 	"gix-curl",
 ] }
-clap = { version = "4.5.12", features = ["derive"] }
-crates_io_api = "0.11.0"
+clap = { version = "4.5.57", features = ["derive"] }
+crates_io_api = "0.12.0"
 futures = "0.3.30"
-log = "0.4.22"
-public-api = "0.47.1"
-reqwest = "0.12.5"
-rustdoc-json = "0.9.6"
-semver = "1.0.24"
+log = "0.4.29"
+public-api = "0.50.3"
+reqwest = "0.12.28"
+rustdoc-json = "0.9.8"
+semver = "1.0.27"
 serde = { version = "1.0.204", features = ["derive"] }
 serde_yaml = "0.9.34"
-simple_logger = "5.0.0"
-tempfile = "3.10.1"
+simple_logger = "5.1.0"
+tempfile = "3.24.0"
 termcolor = "1.4.1"
-tokio = { version = "1.39.2", features = ["rt-multi-thread", "macros"] }
+tokio = { version = "1.49.0", features = ["rt-multi-thread", "macros"] }
 toml = { version = "0.8.19", features = ["preserve_order"] }
-toml_edit = "0.22.20"
+toml_edit = "0.23.10"
 #toml_edit_cargo = { version = "0.21.0", package = "toml_edit" }
 walkdir = "2.5.0"

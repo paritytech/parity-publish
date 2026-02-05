@@ -23,7 +23,7 @@ pub fn get_registry<'a>(workspace: &Workspace<'a>) -> Result<RegistrySource<'a>>
 pub fn get_crate(reg: &mut RegistrySource, name: InternedString) -> Result<Vec<IndexSummary>> {
     match reg.query_vec(
         &Dependency::parse(name, None, reg.source_id())?,
-        QueryKind::Alternatives,
+        QueryKind::AlternativeNames,
     )? {
         Poll::Ready(c) if c.is_empty() => Err(anyhow!("not found")),
         Poll::Ready(c) => Ok(c),

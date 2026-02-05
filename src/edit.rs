@@ -106,7 +106,7 @@ pub fn rewrite_deps(
     for dep in deps {
         let exisiting_deps = manifest
             .get_dependencies(workspace, &Features::default())
-            .filter(|(name, _, _)| name.as_str() == dep.name.as_str())
+            .filter(|(name, _, _)| name == &dep.name)
             .collect::<Vec<_>>();
 
         for exisiting_dep in exisiting_deps {
@@ -114,7 +114,7 @@ pub fn rewrite_deps(
             let mut existing_dep = exisiting_dep?;
             let dev = table.kind() == DepKind::Development;
 
-            if existing_dep.toml_key() == dep.name.as_str() {
+            if existing_dep.toml_key() == dep.name {
                 let table = table
                     .to_table()
                     .iter()
@@ -235,7 +235,7 @@ pub fn remove_dep_inner(
 
     let exiting_deps = manifest
         .get_dependencies(workspace, &Features::default())
-        .filter(|(name, _, _)| name.as_str() == dep.name.as_str())
+        .filter(|(name, _, _)| name == &dep.name)
         .collect::<Vec<_>>();
     for (_name, table, dep) in exiting_deps {
         let table = table
@@ -355,7 +355,7 @@ pub fn remove_dep_feature_all(
         let mut manifest = LocalManifest::try_new(c.manifest_path())?;
 
         for (_dep_name, table, dep) in manifest.get_dependencies(workspace, &Features::default())
-            .filter(|(dep_name, _, _)| dep_name.as_str() == name)
+            .filter(|(dep_name, _, _)| dep_name == name)
         {
             if table.kind() == DepKind::Development {
                 continue;

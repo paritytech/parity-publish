@@ -105,11 +105,12 @@ pub fn rewrite_deps(
 ) -> Result<()> {
     for dep in deps {
         let exisiting_deps = manifest
-            .get_dependency_versions(&dep.name, workspace, &Features::default())
+            .get_dependencies(workspace, &Features::default())
+            .filter(|(name, _, _)| name == &dep.name)
             .collect::<Vec<_>>();
 
         for exisiting_dep in exisiting_deps {
-            let (table, exisiting_dep) = exisiting_dep;
+            let (_name, table, exisiting_dep) = exisiting_dep;
             let mut existing_dep = exisiting_dep?;
             let dev = table.kind() == DepKind::Development;
 
@@ -233,9 +234,10 @@ pub fn remove_dep_inner(
     let mut removed = Vec::new();
 
     let exiting_deps = manifest
-        .get_dependency_versions(&dep.name, workspace, &Features::default())
+        .get_dependencies(workspace, &Features::default())
+        .filter(|(name, _, _)| name == &dep.name)
         .collect::<Vec<_>>();
-    for (table, dep) in exiting_deps {
+    for (_name, table, dep) in exiting_deps {
         let table = table
             .to_table()
             .iter()
@@ -352,7 +354,8 @@ pub fn remove_dep_feature_all(
         let mut remove = Vec::new();
         let mut manifest = LocalManifest::try_new(c.manifest_path())?;
 
-        for (table, dep) in manifest.get_dependency_versions(name, workspace, &Features::default())
+        for (_dep_name, table, dep) in manifest.get_dependencies(workspace, &Features::default())
+            .filter(|(dep_name, _, _)| dep_name == name)
         {
             if table.kind() == DepKind::Development {
                 continue;

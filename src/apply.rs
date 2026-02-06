@@ -192,7 +192,7 @@ fn publish(
 
         n += 1;
 
-        let wait = Duration::from_secs(60);
+        let wait = Duration::from_secs(15);
         let before = Instant::now();
 
         let opts = PublishOpts {

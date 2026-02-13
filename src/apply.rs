@@ -79,6 +79,7 @@ pub async fn handle_apply(args: Args, apply: Apply) -> Result<()> {
 
         let mut manifest = LocalManifest::try_new(c.manifest_path())?;
         edit::set_version(&mut manifest, &pkg.to)?;
+        edit::remove_rust_version(&mut manifest)?;
         //edit::set_description(&plan, &mut manifest, &pkg.name)?;
         edit::set_readme_desc(&workspace, &plan)?;
 

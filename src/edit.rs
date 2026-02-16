@@ -481,6 +481,16 @@ pub fn set_version(manifest: &mut LocalManifest, new_ver: &str) -> Result<()> {
     Ok(())
 }
 
+/// Remove `package.rust-version` from the manifest to prevent cargo publish
+/// from installing an old toolchain during verification.
+pub fn remove_rust_version(manifest: &mut LocalManifest) -> Result<()> {
+    let package = manifest.manifest.get_table_mut(&["package".to_string()])?;
+    if let Some(table) = package.as_table_like_mut() {
+        table.remove("rust-version");
+    }
+    Ok(())
+}
+
 pub fn remove_crate(workspace: &Workspace, remove_c: &RemoveCrate) -> Result<()> {
     let root_manifest = read_to_string(workspace.root_manifest())?;
     let mut root_manifest: DocumentMut = root_manifest.parse()?;

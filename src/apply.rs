@@ -79,6 +79,7 @@ pub async fn handle_apply(args: Args, apply: Apply) -> Result<()> {
 
         let mut manifest = LocalManifest::try_new(c.manifest_path())?;
         edit::set_version(&mut manifest, &pkg.to)?;
+        edit::remove_rust_version(&mut manifest)?;
         //edit::set_description(&plan, &mut manifest, &pkg.name)?;
         edit::set_readme_desc(&workspace, &plan)?;
 
@@ -175,6 +176,18 @@ fn publish(
     )?;
 
     drop(_lock);
+
+    // Cargo sets the `CARGO` env var to the current executable when running
+    // build scripts. Since parity-publish embeds cargo as a library, this would
+    // point build scripts to the parity-publish binary instead of the real
+    // cargo, causing "unrecognized subcommand" errors (e.g. `cargo metadata`).
+    // Override it to point to the actual cargo binary.
+    if let Ok(output) = std::process::Command::new("rustup").args(["which", "cargo"]).output() {
+        if output.status.success() {
+            let cargo_path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            env::set_var("CARGO", &cargo_path);
+        }
+    }
 
     let mut iter = plan
         .crates

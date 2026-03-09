@@ -29,6 +29,37 @@ pub async fn handle_apply(args: Args, apply: Apply) -> Result<()> {
     let mut stdout = args.stdout();
     let mut stderr = args.stderr();
 
+    // Cargo's GlobalContext snapshots all env vars at construction time.
+    // We must set overrides BEFORE creating GlobalContext.
+    //
+    // CARGO: Since parity-publish embeds cargo as a library, current_exe()
+    // returns the parity-publish binary (not "cargo"), so cargo_exe() falls
+    // back to the $CARGO env var from the snapshot. We set it to the real
+    // cargo binary so build scripts don't try to run `parity-publish metadata`.
+    //
+    // RUSTUP_TOOLCHAIN: Without this, rustup's proxy may pick up stale
+    // toolchain config or rust-version fields and try to install/use old Rust
+    // versions during publish verification. Pinning to the active toolchain
+    // ensures all subprocesses use the same Rust version.
+    if let Ok(output) = std::process::Command::new("rustup").args(["which", "cargo"]).output() {
+        if output.status.success() {
+            let cargo_path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            env::set_var("CARGO", &cargo_path);
+        }
+    }
+    if let Ok(output) = std::process::Command::new("rustup")
+        .args(["show", "active-toolchain"])
+        .output()
+    {
+        if output.status.success() {
+            let toolchain = String::from_utf8_lossy(&output.stdout);
+            // Output format: "stable-aarch64-apple-darwin (default)" — take first word
+            if let Some(name) = toolchain.split_whitespace().next() {
+                env::set_var("RUSTUP_TOOLCHAIN", name);
+            }
+        }
+    }
+
     let cargo_config = cargo::GlobalContext::default()?;
     cargo_config
         .shell()
@@ -176,18 +207,6 @@ fn publish(
     )?;
 
     drop(_lock);
-
-    // Cargo sets the `CARGO` env var to the current executable when running
-    // build scripts. Since parity-publish embeds cargo as a library, this would
-    // point build scripts to the parity-publish binary instead of the real
-    // cargo, causing "unrecognized subcommand" errors (e.g. `cargo metadata`).
-    // Override it to point to the actual cargo binary.
-    if let Ok(output) = std::process::Command::new("rustup").args(["which", "cargo"]).output() {
-        if output.status.success() {
-            let cargo_path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            env::set_var("CARGO", &cargo_path);
-        }
-    }
 
     let mut iter = plan
         .crates

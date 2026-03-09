@@ -3974,7 +3974,7 @@ dependencies = [
 
 [[package]]
 name = "parity-publish"
-version = "0.10.10"
+version = "0.10.11"
 dependencies = [
  "anyhow",
  "cargo",

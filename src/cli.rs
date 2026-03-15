@@ -260,6 +260,9 @@ pub struct Apply {
     /// Print packages that need publish
     #[arg(long)]
     pub print: bool,
+    /// Number of crates to publish in parallel
+    #[arg(long, short = 'j', default_value = "1")]
+    pub jobs: usize,
 }
 
 #[derive(Parser, Debug)]

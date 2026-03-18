@@ -290,8 +290,10 @@ same level have no interdependencies and are published simultaneously (up to `-j
 time). Between levels, a 30 second wait allows the crates.io index to update before
 dependent crates are published.
 
-`--no-verify` is recommended with parallel publishing to avoid concurrent cargo build
-conflicts in the shared target directory.
+`--no-verify` can be used with parallel publishing to avoid concurrent cargo build
+conflicts in the shared target directory. Note that this skips build verification,
+which may result in publishing broken crates. Consider running `cargo publish --dry-run`
+or `cargo package` beforehand to catch issues.
 
 The process is resumable: if it fails partway through, re-running will skip
 already-published crates automatically.

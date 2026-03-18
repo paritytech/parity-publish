@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use cargo::{
     core::{dependency::DepKind, resolver::CliFeatures, FeatureValue, Package, Workspace},
-    ops::{Packages, PublishOpts},
+    ops::{Packages, PublishOpts, RegistryOrIndex},
     util::{cache_lock::CacheLockMode, toml_mut::manifest::LocalManifest},
 };
 
@@ -86,9 +86,13 @@ pub async fn handle_apply(args: Args, apply: Apply) -> Result<()> {
         return Ok(());
     }
 
+    let token_env = if apply.staging {
+        "PARITY_PUBLISH_STAGING_CRATESIO_TOKEN"
+    } else {
+        "PARITY_PUBLISH_CRATESIO_TOKEN"
+    };
     let token = if apply.publish {
-        env::var("PARITY_PUBLISH_CRATESIO_TOKEN")
-            .context("PARITY_PUBLISH_CRATESIO_TOKEN must be set")?
+        env::var(token_env).with_context(|| format!("{} must be set", token_env))?
     } else {
         String::new()
     };
@@ -256,7 +260,11 @@ fn publish(
             targets: Vec::new(),
             dry_run: apply.dry_run,
             cli_features: CliFeatures::new_all(false),
-            reg_or_index: None,
+            reg_or_index: if apply.staging {
+                Some(RegistryOrIndex::Registry("staging".to_string()))
+            } else {
+                None
+            },
         };
         cargo::ops::publish(&workspace, &opts)?;
 
@@ -472,6 +480,10 @@ async fn publish_parallel(
 
                 if apply.allow_dirty {
                     cmd.arg("--allow-dirty");
+                }
+
+                if apply.staging {
+                    cmd.arg("--registry").arg("staging");
                 }
 
                 cmd.current_dir(path);

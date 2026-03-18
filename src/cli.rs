@@ -263,6 +263,9 @@ pub struct Apply {
     /// Number of crates to publish in parallel
     #[arg(long, short = 'j', default_value = "1")]
     pub jobs: usize,
+    /// Publish to staging.crates.io instead of crates.io
+    #[arg(long)]
+    pub staging: bool,
 }
 
 #[derive(Parser, Debug)]

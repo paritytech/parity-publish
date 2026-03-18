@@ -264,6 +264,23 @@ parity-publish apply --publish -j 8
 parity-publish apply --publish -j 8 --no-verify
 ```
 
+#### Staging registry
+
+By default, crates are published to crates.io. Use `--staging` to publish to
+staging.crates.io instead. When `--staging` is used, the token is read from
+`PARITY_PUBLISH_STAGING_CRATESIO_TOKEN` instead of `PARITY_PUBLISH_CRATESIO_TOKEN`.
+
+```
+parity-publish apply --publish --staging
+parity-publish apply --publish --staging -j 8 --no-verify
+```
+
+Note: the `staging` registry must be configured in `.cargo/config.toml`:
+```toml
+[registries.staging]
+index = "sparse+https://index.staging.crates.io/"
+```
+
 Parallel publishing works by grouping crates into dependency levels. Crates within the
 same level have no interdependencies and are published simultaneously (up to `-j N` at a
 time). Between levels, a 30 second wait allows the crates.io index to update before

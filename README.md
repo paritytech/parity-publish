@@ -8,6 +8,13 @@ with crates, crate.io and publishing releases. Manage maintaining past
 releases with backports and patch releases. And ensure polkadot-sdk git repro
 stays in a healthy state when it comes to publishing.
 
+## Environment Variables
+
+| Variable | Required for | Description |
+|---|---|---|
+| `PARITY_PUBLISH_CRATESIO_TOKEN` | Production publishing | API token for crates.io |
+| `PARITY_PUBLISH_STAGING_CRATESIO_TOKEN` | Staging publishing (`--staging`) | API token for staging.crates.io |
+
 ## Commands
 
 There are a bunch of commands for doing various things.
@@ -78,9 +85,6 @@ parachain-info (cumulus/parachains/pallets/parachain-info):
 The claim command looks for unpublished crates in the workspace and publishes
 empty v0.0.0 releases so that other's can't take our crates between the time
 they are added to git and a release happens.
-
-The `PARITY_PUBLISH_CRATESIO_TOKEN` must be set for the tool to be able to claim
-crates.
 
 #### CI
 
@@ -248,10 +252,51 @@ in `Plan.toml`.
     - Any crates that require the feature unconditionally are removed from the workspace
 
 Once the changes have been applied, they can be double checked and commited. Then
-`parity-publish apply --publish` will start publishing the crates. It takes a few minutes
-per each crate to publish. With the amount of crates we have this takes an extremely long
-amount of time. `5 minutes x 350 crates = 29 hours`. This task needs to be let run overnight
-and then some.
+`parity-publish apply --publish` will start publishing the crates.
+
+#### Sequential publishing (default)
+
+By default, crates are published one at a time with a 15 second delay between each.
+With large workspaces this can take a very long time.
+
+#### Parallel publishing
+
+Use `--jobs` / `-j` to publish multiple crates in parallel:
+
+```
+parity-publish apply --publish -j 8
+parity-publish apply --publish -j 8 --no-verify
+```
+
+#### Staging registry
+
+By default, crates are published to crates.io. Use `--staging` to publish to
+staging.crates.io instead. When `--staging` is used, the token is read from
+`PARITY_PUBLISH_STAGING_CRATESIO_TOKEN` instead of `PARITY_PUBLISH_CRATESIO_TOKEN`.
+
+```
+parity-publish apply --publish --staging
+parity-publish apply --publish --staging -j 8 --no-verify
+```
+
+Note: the `staging` registry must be configured in `.cargo/config.toml`:
+```toml
+[registries.staging]
+index = "sparse+https://index.staging.crates.io/"
+```
+
+Parallel publishing works by grouping crates into dependency levels. Crates within the
+same level have no interdependencies and are published simultaneously (up to `-j N` at a
+time). Between levels, a 30 second wait allows the crates.io index to update before
+dependent crates are published.
+
+`--no-verify` can be used with parallel publishing to avoid concurrent cargo build
+conflicts in the shared target directory. Note that this skips build verification,
+which may result in publishing broken crates. Consider running `cargo publish --dry-run`
+or `cargo package` beforehand to catch issues.
+
+The process is resumable: if it fails partway through, re-running will skip
+already-published crates automatically.
 
 #### Post release
 
@@ -266,12 +311,33 @@ parity-publish apply --publish
 
 #### Example
 
+Sequential:
 ```
-morganamilo@songbird % parity-pubish apply --publish
+morganamilo@songbird % parity-publish apply --publish
 
 rewriting manifests...
 Publishing 349 packages (0 skipped)
-(1/349) publishing binary-merkle-tree-12.0.0...
+(1/349) publishing binary-merkle-tree-12.0.0... (3s)
+(2/349) publishing sp-std-14.0.0... (4s)
+```
+
+Parallel:
+```
+morganamilo@songbird % parity-publish apply --publish -j 8 --no-verify
+
+rewriting manifests...
+Publishing 349 crates in 45 levels (0 skipped, max 8 parallel)
+
+--- Level 1/45 (12 crates) ---
+(  1/349) published binary-merkle-tree-12.0.0
+(  2/349) published sp-std-14.0.0
+...
+    level completed in 5s
+Waiting 30s for index update... done
+
+--- Level 2/45 (18 crates) ---
+(  13/349) published sp-core-28.0.0
+...
 ```
 
 ## Limitations / Future plans

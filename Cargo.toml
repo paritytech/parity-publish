@@ -27,7 +27,7 @@ serde_yaml = "0.9.34"
 simple_logger = "5.1.0"
 tempfile = "3.24.0"
 termcolor = "1.4.1"
-tokio = { version = "1.49.0", features = ["rt-multi-thread", "macros"] }
+tokio = { version = "1.49.0", features = ["rt-multi-thread", "macros", "process", "time"] }
 toml = { version = "0.8.19", features = ["preserve_order"] }
 toml_edit = "0.23.10"
 #toml_edit_cargo = { version = "0.21.0", package = "toml_edit" }

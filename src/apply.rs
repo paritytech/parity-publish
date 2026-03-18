@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use cargo::{
     core::{dependency::DepKind, resolver::CliFeatures, FeatureValue, Package, Workspace},
-    ops::{Packages, PublishOpts},
+    ops::{Packages, PublishOpts, RegistryOrIndex},
     util::{cache_lock::CacheLockMode, toml_mut::manifest::LocalManifest},
 };
 
@@ -12,6 +12,7 @@ use std::{
     env::{self, current_dir},
     io::Write,
     path::Path,
+    process::Stdio,
     str::FromStr,
     thread,
     time::{Duration, Instant},
@@ -20,7 +21,7 @@ use std::{
 use crate::{
     cli::{Apply, Args},
     config, edit,
-    plan::{expand_plan, get_upstream, Planner, RemoveFeature},
+    plan::{expand_plan, get_upstream, Planner, Publish, RemoveFeature},
     registry,
 };
 
@@ -85,11 +86,28 @@ pub async fn handle_apply(args: Args, apply: Apply) -> Result<()> {
         return Ok(());
     }
 
+    let token_env = if apply.staging {
+        "PARITY_PUBLISH_STAGING_CRATESIO_TOKEN"
+    } else {
+        "PARITY_PUBLISH_CRATESIO_TOKEN"
+    };
     let token = if apply.publish {
-        env::var("PARITY_PUBLISH_CRATESIO_TOKEN")
-            .context("PARITY_PUBLISH_CRATESIO_TOKEN must be set")?
+        env::var(token_env).with_context(|| format!("{} must be set", token_env))?
     } else {
         String::new()
+    };
+
+    // Compute publish levels before rewriting manifests (workspace still has path deps)
+    let levels = if apply.jobs > 1 {
+        let publishable: BTreeSet<String> = plan
+            .crates
+            .iter()
+            .filter(|c| c.publish)
+            .map(|c| c.name.clone())
+            .collect();
+        compute_publish_levels(&workspace, &publishable)
+    } else {
+        Vec::new()
     };
 
     writeln!(stdout, "rewriting manifests...")?;
@@ -145,7 +163,11 @@ pub async fn handle_apply(args: Args, apply: Apply) -> Result<()> {
         return Ok(());
     }
 
-    publish(&args, &apply, &cargo_config, plan, &path, token)
+    if apply.jobs > 1 {
+        publish_parallel(&args, &apply, &cargo_config, plan, &path, token, levels).await
+    } else {
+        publish(&args, &apply, &cargo_config, plan, &path, token)
+    }
 }
 
 fn list(
@@ -238,7 +260,11 @@ fn publish(
             targets: Vec::new(),
             dry_run: apply.dry_run,
             cli_features: CliFeatures::new_all(false),
-            reg_or_index: None,
+            reg_or_index: if apply.staging {
+                Some(RegistryOrIndex::Registry("staging".to_string()))
+            } else {
+                None
+            },
         };
         cargo::ops::publish(&workspace, &opts)?;
 
@@ -303,4 +329,230 @@ fn remove_dev_features(member: &Package) -> Vec<RemoveFeature> {
     }
 
     remove
+}
+
+/// Compute dependency levels for parallel publishing.
+/// Crates within the same level have no interdependencies and can be published simultaneously.
+fn compute_publish_levels(workspace: &Workspace, publishable: &BTreeSet<String>) -> Vec<Vec<String>> {
+    let mut deps: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+
+    for member in workspace.members() {
+        let name = member.name().to_string();
+        if !publishable.contains(&name) {
+            continue;
+        }
+
+        let member_deps: BTreeSet<String> = member
+            .dependencies()
+            .iter()
+            .filter(|d| d.kind() != DepKind::Development)
+            .map(|d| d.package_name().to_string())
+            .filter(|d| publishable.contains(d))
+            .collect();
+
+        deps.insert(name, member_deps);
+    }
+
+    let mut levels = Vec::new();
+
+    while !deps.is_empty() {
+        let level: Vec<String> = deps
+            .iter()
+            .filter(|(_, d)| d.is_empty())
+            .map(|(name, _)| name.clone())
+            .collect();
+
+        if level.is_empty() {
+            // Remaining crates have circular dependencies; add as final level
+            levels.push(deps.keys().cloned().collect());
+            break;
+        }
+
+        let level_set: BTreeSet<&str> = level.iter().map(|s| s.as_str()).collect();
+
+        for d in deps.values_mut() {
+            d.retain(|dep| !level_set.contains(dep.as_str()));
+        }
+
+        deps.retain(|name, _| !level_set.contains(name.as_str()));
+
+        levels.push(level);
+    }
+
+    levels
+}
+
+async fn publish_parallel(
+    args: &Args,
+    apply: &Apply,
+    config: &cargo::GlobalContext,
+    plan: Planner,
+    path: &Path,
+    token: String,
+    levels: Vec<Vec<String>>,
+) -> Result<()> {
+    let mut stdout = args.stdout();
+    let jobs = apply.jobs.max(1);
+
+    // Check which crates are already published
+    let workspace = Workspace::new(&path.join("Cargo.toml"), config)?;
+    let _lock = config.acquire_package_cache_lock(CacheLockMode::DownloadExclusive)?;
+    let mut reg = registry::get_registry(&workspace)?;
+    registry::download_crates(&mut reg, &workspace, false)?;
+
+    let already_published: BTreeSet<String> = plan
+        .crates
+        .iter()
+        .filter(|c| c.publish)
+        .filter(|c| version_exists(&mut reg, &c.name, &c.to))
+        .map(|c| c.name.clone())
+        .collect();
+
+    drop(_lock);
+
+    // Filter levels to only include crates that need publishing
+    let levels: Vec<Vec<String>> = levels
+        .into_iter()
+        .map(|level| {
+            level
+                .into_iter()
+                .filter(|name| !already_published.contains(name))
+                .collect()
+        })
+        .filter(|level: &Vec<String>| !level.is_empty())
+        .collect();
+
+    let total: usize = levels.iter().map(|l| l.len()).sum();
+    let skipped = already_published.len();
+
+    writeln!(
+        stdout,
+        "Publishing {} crates in {} levels ({} skipped, max {} parallel)",
+        total,
+        levels.len(),
+        skipped,
+        jobs,
+    )?;
+
+    let plan_map: BTreeMap<&str, &Publish> = plan
+        .crates
+        .iter()
+        .map(|c| (c.name.as_str(), c))
+        .collect();
+
+    let mut n = 0usize;
+
+    for (level_idx, level) in levels.iter().enumerate() {
+        writeln!(
+            stdout,
+            "\n--- Level {}/{} ({} crates) ---",
+            level_idx + 1,
+            levels.len(),
+            level.len(),
+        )?;
+        stdout.flush()?;
+
+        let level_start = Instant::now();
+
+        for chunk in level.chunks(jobs) {
+            // Spawn all processes in the chunk simultaneously
+            let mut children: Vec<(String, String, tokio::process::Child)> = Vec::new();
+
+            for crate_name in chunk {
+                let pkg = plan_map.get(crate_name.as_str());
+
+                let mut cmd = tokio::process::Command::new("cargo");
+                cmd.arg("publish")
+                    .arg("-p")
+                    .arg(crate_name)
+                    .arg("--token")
+                    .arg(&token);
+
+                if apply.dry_run {
+                    cmd.arg("--dry-run");
+                }
+
+                let no_verify =
+                    apply.no_verify || apply.dry_run || pkg.map_or(false, |p| !p.verify);
+                if no_verify {
+                    cmd.arg("--no-verify");
+                }
+
+                if apply.allow_dirty {
+                    cmd.arg("--allow-dirty");
+                }
+
+                if apply.staging {
+                    cmd.arg("--registry").arg("staging");
+                }
+
+                cmd.current_dir(path);
+                cmd.stdout(Stdio::piped());
+                cmd.stderr(Stdio::piped());
+
+                let child = cmd.spawn().with_context(|| {
+                    format!("failed to spawn cargo publish for {}", crate_name)
+                })?;
+
+                let version = pkg.map(|p| p.to.clone()).unwrap_or_default();
+                children.push((crate_name.clone(), version, child));
+            }
+
+            // Wait for all children in this chunk (they're already running in parallel)
+            for (name, version, child) in children {
+                let output = child
+                    .wait_with_output()
+                    .await
+                    .with_context(|| format!("cargo publish for {} failed", name))?;
+
+                n += 1;
+
+                if output.status.success() {
+                    writeln!(
+                        stdout,
+                        "({:3}/{:3}) published {}-{}",
+                        n, total, name, version,
+                    )?;
+                } else {
+                    let stderr_str = String::from_utf8_lossy(&output.stderr);
+                    if stderr_str.contains("already uploaded")
+                        || stderr_str.contains("already exists")
+                    {
+                        writeln!(
+                            stdout,
+                            "({:3}/{:3}) skipped {}-{} (already published)",
+                            n, total, name, version,
+                        )?;
+                    } else {
+                        writeln!(
+                            stdout,
+                            "({:3}/{:3}) FAILED {}-{}",
+                            n, total, name, version,
+                        )?;
+                        anyhow::bail!(
+                            "failed to publish {}-{}:\n{}",
+                            name,
+                            version,
+                            stderr_str.trim(),
+                        );
+                    }
+                }
+            }
+        }
+
+        let level_elapsed = level_start.elapsed();
+        writeln!(stdout, "    level completed in {}s", level_elapsed.as_secs())?;
+
+        // Wait between levels for crates.io index to update
+        if level_idx + 1 < levels.len() && !apply.dry_run {
+            let wait = Duration::from_secs(30);
+            write!(stdout, "Waiting {}s for index update...", wait.as_secs())?;
+            stdout.flush()?;
+            tokio::time::sleep(wait).await;
+            writeln!(stdout, " done")?;
+        }
+    }
+
+    writeln!(stdout, "\nDone! Published {} crates.", n)?;
+    Ok(())
 }

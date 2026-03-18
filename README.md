@@ -8,6 +8,13 @@ with crates, crate.io and publishing releases. Manage maintaining past
 releases with backports and patch releases. And ensure polkadot-sdk git repro
 stays in a healthy state when it comes to publishing.
 
+## Environment Variables
+
+| Variable | Required for | Description |
+|---|---|---|
+| `PARITY_PUBLISH_CRATESIO_TOKEN` | Production publishing | API token for crates.io |
+| `PARITY_PUBLISH_STAGING_CRATESIO_TOKEN` | Staging publishing (`--staging`) | API token for staging.crates.io |
+
 ## Commands
 
 There are a bunch of commands for doing various things.
@@ -78,9 +85,6 @@ parachain-info (cumulus/parachains/pallets/parachain-info):
 The claim command looks for unpublished crates in the workspace and publishes
 empty v0.0.0 releases so that other's can't take our crates between the time
 they are added to git and a release happens.
-
-The `PARITY_PUBLISH_CRATESIO_TOKEN` must be set for the tool to be able to claim
-crates.
 
 #### CI
 

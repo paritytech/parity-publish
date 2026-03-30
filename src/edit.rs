@@ -20,7 +20,7 @@ pub fn rewrite_workspace_dep(
     workspace_crates: &BTreeMap<&str, &Package>,
     upstream: &BTreeMap<String, Vec<IndexSummary>>,
     dep: &RewriteDep,
-    cdep: &mut Dependency,
+    _cdep: &mut Dependency,
     dev: bool,
     use_registry: bool,
 ) -> Result<()> {
@@ -29,6 +29,14 @@ pub fn rewrite_workspace_dep(
         .unwrap()
         .get_mut("dependencies")
         .unwrap();
+
+    if dev {
+        // Dev dependencies are not included in the published crate.
+        // The root workspace definition (updated below for non-dev deps) keeps
+        // workspace = true resolution working, so we can leave dev deps untouched
+        // and avoid introducing cosmetic changes like explicit default-features.
+        return Ok(());
+    }
 
     let wdep = wdeps.get_mut(&dep.name).unwrap();
     let name = if let Some(package) = wdep.get("package") {
@@ -47,22 +55,7 @@ pub fn rewrite_workspace_dep(
             .clone()
     };
 
-    if dev {
-        let default_features = wdep.get("default-features").map(|d| d.as_bool().unwrap());
-        if let Some(path) = wdep.get("path") {
-            let path = path.as_str().unwrap();
-            let path = Path::new(path).canonicalize().unwrap();
-            let source = PathSource::new(&path);
-            *cdep = cdep.clone().set_source(source);
-            if default_features == Some(false) && cdep.default_features != Some(true) {
-                *cdep = cdep.clone().set_default_features(false);
-            }
-            if dep.name != name {
-                cdep.name = name.to_string();
-                *cdep = cdep.clone().set_rename(&dep.name);
-            }
-        }
-    } else {
+    {
         let wdep = wdep.as_inline_table_mut().unwrap();
         let name = wdep
             .get("package")
@@ -87,7 +80,6 @@ pub fn rewrite_workspace_dep(
             }
         }
         wdep.insert("version", toml_edit::Value::String(Formatted::new(new_ver)));
-        wdep.fmt();
     }
     Ok(())
 }

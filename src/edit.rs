@@ -128,13 +128,11 @@ pub fn rewrite_deps(
                         dev,
                         use_registry,
                     )?;
-                    manifest.insert_into_table(
-                        &table,
-                        &existing_dep,
-                        workspace.gctx(),
-                        workspace_path,
-                        &Features::default(),
-                    )?;
+                    // Skip insert_into_table for workspace deps — rewrite_workspace_dep
+                    // already updates the root manifest's [workspace.dependencies] and
+                    // the crate's `workspace = true` entry doesn't need re-insertion.
+                    // Re-inserting triggers toml_mut normalization that causes cosmetic
+                    // reformatting (e.g. `{ workspace = true }` → `.workspace = true`).
                     continue;
                 }
 

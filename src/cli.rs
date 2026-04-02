@@ -67,6 +67,8 @@ pub enum Command {
     Config(Config),
     /// Query a workspace
     Workspace(Workspace),
+    /// Restore clean manifests after publishing, keeping only version bumps
+    Restore(Restore),
 }
 
 #[derive(Parser, Debug)]
@@ -266,6 +268,16 @@ pub struct Apply {
     /// Publish to staging.crates.io instead of crates.io
     #[arg(long)]
     pub staging: bool,
+}
+
+#[derive(Parser, Debug)]
+pub struct Restore {
+    /// Git ref to restore Cargo.toml files from (default: HEAD~1)
+    #[arg(long, default_value = "HEAD~1")]
+    pub from: String,
+    /// Don't restore, just print what would be done
+    #[arg(long)]
+    pub dry_run: bool,
 }
 
 #[derive(Parser, Debug)]

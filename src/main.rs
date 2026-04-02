@@ -15,6 +15,7 @@ mod plan;
 mod prdoc;
 mod public_api;
 mod registry;
+mod restore;
 mod shared;
 mod status;
 mod workspace;
@@ -45,5 +46,6 @@ async fn main() -> Result<()> {
         cli::Command::Check(check) => check::handle_check(args, check).await,
         cli::Command::Config(config) => config::handle_config(args, config),
         cli::Command::Workspace(workspace) => workspace::handle_workspace(args, workspace),
+        cli::Command::Restore(restore) => restore::handle_restore(args, restore),
     }
 }

@@ -340,6 +340,50 @@ Waiting 30s for index update... done
 ...
 ```
 
+### Restore
+
+The restore command reverts Cargo.toml changes made by `apply` (dependency rewrites,
+formatting changes, `default-features` additions) while keeping only the version bumps.
+
+This is useful after publishing: the `apply` command rewrites workspace dependencies
+to versioned registry dependencies, which is needed for `cargo publish` but shouldn't
+be committed to the repository long-term. The `restore` command brings back the clean
+`{ workspace = true }` style manifests with only the `version` field updated.
+
+```
+# After publishing, restore clean manifests
+parity-publish restore
+
+# Restore from a specific git ref (default: HEAD~1)
+parity-publish restore --from HEAD~2
+
+# Preview what would be done
+parity-publish restore --dry-run
+```
+
+How it works:
+
+1. Reads Plan.toml for crates with version bumps
+2. Restores all Cargo.toml and Cargo.lock from the given git ref (default `HEAD~1`)
+3. Re-applies only the `version` field in each bumped crate's Cargo.toml (format-preserving)
+4. Runs `cargo update --workspace` to sync the lockfile
+
+#### Example
+
+```
+morganamilo@songbird % parity-publish restore --dry-run
+
+Restoring clean manifests (417 crates bumped)
+
+Dry run — would restore from HEAD~1
+  binary-merkle-tree -> 16.1.1
+  sp-core -> 40.0.0
+  frame-support -> 46.0.0
+  polkadot-sdk -> 2603.0.0
+  ...
+Done
+```
+
 ## Limitations / Future plans
 
 ### Changes

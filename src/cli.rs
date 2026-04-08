@@ -268,6 +268,9 @@ pub struct Apply {
     /// Publish to staging.crates.io instead of crates.io
     #[arg(long)]
     pub staging: bool,
+    /// Run `cargo clean` after every N published crates to free disk space (0 = disabled)
+    #[arg(long, default_value = "0")]
+    pub clean_every: usize,
 }
 
 #[derive(Parser, Debug)]

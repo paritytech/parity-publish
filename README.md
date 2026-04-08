@@ -298,6 +298,20 @@ or `cargo package` beforehand to catch issues.
 The process is resumable: if it fails partway through, re-running will skip
 already-published crates automatically.
 
+#### Disk cleanup
+
+For large releases (100+ crates), the runner's disk can fill up with build
+artifacts. Use `--clean-every N` to run `cargo clean` after every N published
+crates, freeing disk space:
+
+```
+parity-publish apply --publish --clean-every 50
+parity-publish apply --publish -j 8 --no-verify --clean-every 50
+```
+
+Set to `0` (the default) to disable cleanup. For major releases where more than
+100 crates are expected, we recommend setting this to `50`.
+
 #### Post release
 
 After the initial plan has been generated and release pushed out, the plan file can then be

@@ -207,6 +207,7 @@ fn publish(
 ) -> Result<()> {
     let mut stdout = args.stdout();
     let mut n = 1;
+    let mut since_clean = 0usize;
 
     let workspace = Workspace::new(&path.join("Cargo.toml"), config)?;
 
@@ -245,6 +246,7 @@ fn publish(
         stdout.flush()?;
 
         n += 1;
+        since_clean += 1;
 
         let wait = Duration::from_secs(60);
         let before = Instant::now();
@@ -270,6 +272,16 @@ fn publish(
 
         let after = Instant::now();
         writeln!(stdout, " ({}s)", (after - before).as_secs())?;
+
+        if apply.clean_every > 0 && since_clean >= apply.clean_every && iter.peek().is_some() {
+            writeln!(stdout, "Running cargo clean to free disk space...")?;
+            std::process::Command::new("cargo")
+                .arg("clean")
+                .current_dir(path)
+                .status()
+                .context("failed to run cargo clean")?;
+            since_clean = 0;
+        }
 
         if iter.peek().is_some() {
             if let Some(delay) = (before + wait).checked_duration_since(after) {
@@ -441,6 +453,7 @@ async fn publish_parallel(
         .collect();
 
     let mut n = 0usize;
+    let mut since_clean = 0usize;
 
     for (level_idx, level) in levels.iter().enumerate() {
         writeln!(
@@ -506,6 +519,7 @@ async fn publish_parallel(
                     .with_context(|| format!("cargo publish for {} failed", name))?;
 
                 n += 1;
+                since_clean += 1;
 
                 if output.status.success() {
                     writeln!(
@@ -537,6 +551,17 @@ async fn publish_parallel(
                         );
                     }
                 }
+            }
+
+            if apply.clean_every > 0 && since_clean >= apply.clean_every && n < total {
+                writeln!(stdout, "Running cargo clean to free disk space...")?;
+                tokio::process::Command::new("cargo")
+                    .arg("clean")
+                    .current_dir(path)
+                    .status()
+                    .await
+                    .context("failed to run cargo clean")?;
+                since_clean = 0;
             }
         }
 

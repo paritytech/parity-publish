@@ -271,6 +271,10 @@ pub struct Apply {
     /// Run `cargo clean` after every N published crates to free disk space (0 = disabled)
     #[arg(long, default_value = "0")]
     pub clean_every: usize,
+    /// Delay in seconds between parallel publish batches (only applies with `-j > 1`, 0 = no delay).
+    /// Useful to avoid hitting crates.io rate limits.
+    #[arg(long, default_value = "0")]
+    pub publish_delay: u64,
 }
 
 #[derive(Parser, Debug)]

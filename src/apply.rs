@@ -467,7 +467,8 @@ async fn publish_parallel(
 
         let level_start = Instant::now();
 
-        for chunk in level.chunks(jobs) {
+        let mut chunks = level.chunks(jobs).peekable();
+        while let Some(chunk) = chunks.next() {
             // Spawn all processes in the chunk simultaneously
             let mut children: Vec<(String, String, tokio::process::Child)> = Vec::new();
 
@@ -562,6 +563,14 @@ async fn publish_parallel(
                     .await
                     .context("failed to run cargo clean")?;
                 since_clean = 0;
+            }
+
+            if apply.publish_delay > 0 && chunks.peek().is_some() && !apply.dry_run {
+                let wait = Duration::from_secs(apply.publish_delay);
+                write!(stdout, "Waiting {}s before next batch...", wait.as_secs())?;
+                stdout.flush()?;
+                tokio::time::sleep(wait).await;
+                writeln!(stdout, " done")?;
             }
         }
 

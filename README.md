@@ -295,6 +295,15 @@ conflicts in the shared target directory. Note that this skips build verificatio
 which may result in publishing broken crates. Consider running `cargo publish --dry-run`
 or `cargo package` beforehand to catch issues.
 
+`--publish-delay N` adds a delay of N seconds between parallel publish batches within a
+level. Each batch spawns up to `-j` concurrent `cargo publish` processes, so bursts of
+uploads can trigger crates.io rate limits on large releases. Defaults to `0` (no delay,
+current behavior). The inter-level 30s index-propagation wait is unaffected.
+
+```
+parity-publish apply --publish -j 8 --no-verify --publish-delay 15
+```
+
 The process is resumable: if it fails partway through, re-running will skip
 already-published crates automatically.
 

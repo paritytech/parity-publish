@@ -63,6 +63,7 @@ main() → CLI (clap) → Command dispatch → Handler
 
 - **Topological ordering** (`plan.rs::order()`): Ensures dependencies publish before dependents
 - **Manifest editing** (`edit.rs`): Converts workspace/path/git deps to versioned deps while preserving TOML formatting
+- **Version bumping** (`plan.rs::bump_version()`): Steps over version numbers already taken on crates.io, yanked included
 
 ## CLI Commands
 
@@ -94,6 +95,7 @@ main() → CLI (clap) → Command dispatch → Handler
 - **CARGO env var override** (`apply.rs`): Since parity-publish embeds cargo as a library, `current_exe()` returns the parity-publish binary. The `CARGO` env var must be set to the real cargo binary BEFORE `GlobalContext::default()`, which snapshots env vars. Otherwise build scripts will try to run `parity-publish metadata` and fail.
 - **RUSTUP_TOOLCHAIN override** (`apply.rs`): Similarly set before `GlobalContext::default()` to prevent rustup from installing old toolchains based on `rust-version` fields during publish verification.
 - **Dev dep default-features** (`edit.rs:rewrite_workspace_dep`): When dev deps are rewritten from `workspace = true` to path deps, `default-features = false` is explicitly propagated from the workspace definition since the inheritance is lost.
+- **Yanked versions** (`registry.rs:get_crate`): Queries the index with `QueryKind::RejectedVersions`, not `AlternativeNames`, because cargo silently drops yanked versions from every other query kind. Yanked versions must stay visible so version planning never reuses a taken number (crates.io answers `crate version 'x' is already uploaded`). Consumers split the two meanings via `registry::is_usable` ("can be depended on" — excludes yanked) and `registry::version_taken` ("number is reserved" — includes yanked).
 
 ## Development Notes
 

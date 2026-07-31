@@ -166,7 +166,7 @@ fn get_from_last_release(
         let upstream = registry::get_crate(&mut reg, c.name())?;
         let upstream = upstream
             .iter()
-            .filter(|c| !c.is_yanked())
+            .filter(|c| registry::is_usable(c))
             .filter(|c| !c.as_summary().version().is_prerelease())
             .max_by_key(|c| c.as_summary().version());
 

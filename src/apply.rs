@@ -215,6 +215,8 @@ fn publish(
     let mut reg = registry::get_registry(&workspace)?;
     registry::download_crates(&mut reg, &workspace, false)?;
 
+    check_yanked_conflicts(&mut reg, &plan)?;
+
     let skipped = plan
         .crates
         .iter()
@@ -293,17 +295,60 @@ fn publish(
     Ok(())
 }
 
+/// Whether the version is already taken on the registry.
+///
+/// Yanked versions count as taken -- crates.io keeps their number reserved
+/// forever -- which is what makes this usable to skip crates that were already
+/// published by a previous, interrupted run.
 fn version_exists(reg: &mut cargo::sources::RegistrySource, name: &str, ver: &str) -> bool {
     let c = registry::get_crate(reg, name.to_string().into());
     let ver = Version::parse(ver).unwrap();
 
     if let Ok(c) = c {
-        if c.iter().any(|v| v.as_summary().version() == &ver) {
+        if registry::version_taken(&c, &ver) {
             return true;
         }
     }
 
     false
+}
+
+/// Bail if the plan wants to publish a version number that a yanked release
+/// already owns.
+///
+/// Such a version can never be uploaded (crates.io answers `crate version 'x'
+/// is already uploaded`), and because `version_exists` counts it as taken the
+/// crate would otherwise be silently skipped instead of released. Catch it
+/// before a single crate goes out rather than partway through the release.
+fn check_yanked_conflicts(reg: &mut cargo::sources::RegistrySource, plan: &Planner) -> Result<()> {
+    let mut conflicts = Vec::new();
+
+    for pkg in plan.crates.iter().filter(|c| c.publish) {
+        let Ok(ver) = Version::parse(&pkg.to) else {
+            continue;
+        };
+        let Ok(summaries) = registry::get_crate(reg, pkg.name.as_str().into()) else {
+            continue;
+        };
+
+        if registry::find_version(&summaries, &ver).is_some_and(|s| s.is_yanked()) {
+            conflicts.push(format!("    {} {}", pkg.name, ver));
+        }
+    }
+
+    if !conflicts.is_empty() {
+        anyhow::bail!(
+            "the following crates are planned at a version that is yanked on crates.io:\n\
+             {}\n\
+             a yanked version keeps its version number reserved forever, so these can never \
+             be published.\n\
+             re-run `parity-publish plan` to pick free version numbers, or bump them in \
+             Plan.toml by hand.",
+            conflicts.join("\n"),
+        );
+    }
+
+    Ok(())
 }
 
 fn remove_dev_features(member: &Package) -> Vec<RemoveFeature> {
@@ -411,6 +456,8 @@ async fn publish_parallel(
     let _lock = config.acquire_package_cache_lock(CacheLockMode::DownloadExclusive)?;
     let mut reg = registry::get_registry(&workspace)?;
     registry::download_crates(&mut reg, &workspace, false)?;
+
+    check_yanked_conflicts(&mut reg, &plan)?;
 
     let already_published: BTreeSet<String> = plan
         .crates

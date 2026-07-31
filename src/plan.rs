@@ -349,22 +349,36 @@ fn bump_version(to: &mut Version, bump: BumpKind, upstream: &[IndexSummary]) -> 
     skipped
 }
 
+/// Report the yanked versions a bump had to step over.
+///
+/// Stepping over a version that is simply already published is routine and
+/// stays quiet. A yanked one is the surprising case -- it is invisible on the
+/// crate's docs page and in normal cargo queries -- so it gets a line.
 fn report_taken(
     stderr: &mut termcolor::StandardStream,
     name: &str,
     skipped: &[Taken],
     to: &Version,
 ) -> Result<()> {
-    for taken in skipped {
-        writeln!(
-            stderr,
-            "{}: {} is already published on crates.io{} -- bumping past it to {}",
-            name,
-            taken.version,
-            if taken.yanked { " (yanked)" } else { "" },
-            to,
-        )?;
+    let yanked = skipped
+        .iter()
+        .filter(|t| t.yanked)
+        .map(|t| t.version.to_string())
+        .collect::<Vec<_>>();
+
+    if yanked.is_empty() {
+        return Ok(());
     }
+
+    writeln!(
+        stderr,
+        "{}: skipping yanked version{} {} -- publishing {} instead",
+        name,
+        if yanked.len() == 1 { "" } else { "s" },
+        yanked.join(", "),
+        to,
+    )?;
+
     Ok(())
 }
 

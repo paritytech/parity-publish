@@ -111,11 +111,20 @@ mod tests {
         let mut reg = get_registry(&workspace).unwrap();
         let name: InternedString = "cumulus-pov-validator".into();
 
-        // Warm the index cache; the first query only schedules the fetch.
-        let _ = get_crate(&mut reg, name);
-        reg.block_until_ready().unwrap();
-
-        let summaries = get_crate(&mut reg, name).unwrap();
+        // A query only schedules the index fetch. A cold cache needs more than
+        // one round: the registry config has to arrive before the crate's own
+        // index file can be requested.
+        let mut summaries = None;
+        for _ in 0..10 {
+            match get_crate(&mut reg, name) {
+                Ok(s) => {
+                    summaries = Some(s);
+                    break;
+                }
+                Err(_) => reg.block_until_ready().unwrap(),
+            }
+        }
+        let summaries = summaries.expect("index lookup never became ready");
         let yanked = Version::parse("0.4.0").unwrap();
 
         assert!(

@@ -226,7 +226,7 @@ A yanked release keeps its version number reserved forever: re-uploading it fail
 and later yanked, a major bump from 0.3.1 plans 0.5.0 rather than 0.4.0, and prints:
 
 ```
-cumulus-pov-validator: 0.4.0 is already published on crates.io (yanked) -- bumping past it to 0.5.0
+cumulus-pov-validator: skipping yanked version 0.4.0 -- publishing 0.5.0 instead
 ```
 
 Yanked releases are still not used for anything else: they're never picked as the version

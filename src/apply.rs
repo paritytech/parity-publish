@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use cargo::{
     core::{dependency::DepKind, resolver::CliFeatures, FeatureValue, Package, Workspace},
     ops::{Packages, PublishOpts, RegistryOrIndex},
+    sources::IndexSummary,
     util::{cache_lock::CacheLockMode, toml_mut::manifest::LocalManifest},
 };
 
@@ -110,6 +111,8 @@ pub async fn handle_apply(args: Args, apply: Apply) -> Result<()> {
         Vec::new()
     };
 
+    check_yanked_conflicts(&plan, &upstream)?;
+
     writeln!(stdout, "rewriting manifests...")?;
 
     config::apply_config(&workspace, &config)?;
@@ -215,8 +218,6 @@ fn publish(
     let mut reg = registry::get_registry(&workspace)?;
     registry::download_crates(&mut reg, &workspace, false)?;
 
-    check_yanked_conflicts(&mut reg, &plan)?;
-
     let skipped = plan
         .crates
         .iter()
@@ -313,26 +314,35 @@ fn version_exists(reg: &mut cargo::sources::RegistrySource, name: &str, ver: &st
     false
 }
 
-/// Bail if the plan wants to publish a version number that a yanked release
+/// Bail if the plan releases a crate at a version number that a yanked release
 /// already owns.
 ///
 /// Such a version can never be uploaded (crates.io answers `crate version 'x'
 /// is already uploaded`), and because `version_exists` counts it as taken the
-/// crate would otherwise be silently skipped instead of released. Catch it
-/// before a single crate goes out rather than partway through the release.
-fn check_yanked_conflicts(reg: &mut cargo::sources::RegistrySource, plan: &Planner) -> Result<()> {
+/// crate would otherwise be silently skipped instead of released. Runs before
+/// any manifest is rewritten, so a stale plan doesn't leave the workspace
+/// half-edited.
+///
+/// Only crates this release actually moves are considered. A plan lists every
+/// workspace member, and the ones that aren't being released sit at `from ==
+/// to` -- their version already being on the registry is the normal state of
+/// affairs, yanked or not, and no reason to stop a release they aren't part of.
+fn check_yanked_conflicts(
+    plan: &Planner,
+    upstream: &BTreeMap<String, Vec<IndexSummary>>,
+) -> Result<()> {
     let mut conflicts = Vec::new();
 
-    for pkg in plan.crates.iter().filter(|c| c.publish) {
+    for pkg in plan.crates.iter().filter(|c| c.publish && c.to != c.from) {
         let Ok(ver) = Version::parse(&pkg.to) else {
             continue;
         };
-        let Ok(summaries) = registry::get_crate(reg, pkg.name.as_str().into()) else {
+        let Some(summaries) = upstream.get(&pkg.name) else {
             continue;
         };
 
-        if registry::find_version(&summaries, &ver).is_some_and(|s| s.is_yanked()) {
-            conflicts.push(format!("    {} {}", pkg.name, ver));
+        if registry::find_version(summaries, &ver).is_some_and(|s| s.is_yanked()) {
+            conflicts.push(format!("    {} {} (from {})", pkg.name, ver, pkg.from));
         }
     }
 
@@ -456,8 +466,6 @@ async fn publish_parallel(
     let _lock = config.acquire_package_cache_lock(CacheLockMode::DownloadExclusive)?;
     let mut reg = registry::get_registry(&workspace)?;
     registry::download_crates(&mut reg, &workspace, false)?;
-
-    check_yanked_conflicts(&mut reg, &plan)?;
 
     let already_published: BTreeSet<String> = plan
         .crates
@@ -636,4 +644,95 @@ async fn publish_parallel(
 
     writeln!(stdout, "\nDone! Published {} crates.", n)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::plan::{BumpKind, Publish};
+
+    fn planned(name: &str, from: &str, to: &str, bump: BumpKind) -> Publish {
+        Publish {
+            name: name.to_string(),
+            from: from.to_string(),
+            to: to.to_string(),
+            bump,
+            publish: true,
+            verify: true,
+            ..Default::default()
+        }
+    }
+
+    fn upstream(name: &str, versions: &[(&str, bool)]) -> BTreeMap<String, Vec<IndexSummary>> {
+        let mut map = BTreeMap::new();
+        map.insert(name.to_string(), crate::plan::tests::summaries(versions));
+        map
+    }
+
+    /// A plan that releases a crate at a yanked number can never succeed, so it
+    /// has to be caught before anything is published.
+    #[test]
+    fn rejects_a_release_planned_at_a_yanked_version() {
+        let plan = Planner {
+            crates: vec![planned("pov", "0.3.1", "0.4.0", BumpKind::Major)],
+            ..Default::default()
+        };
+        let up = upstream("pov", &[("0.3.1", false), ("0.4.0", true)]);
+
+        let err = check_yanked_conflicts(&plan, &up).unwrap_err().to_string();
+        assert!(err.contains("pov 0.4.0"), "{}", err);
+    }
+
+    /// The crate isn't being released -- a plan lists every workspace member,
+    /// and this one sits at its current version. That version being yanked is a
+    /// pre-existing state of the repo, not a reason to block someone else's
+    /// release.
+    #[test]
+    fn ignores_crates_this_release_does_not_move() {
+        let plan = Planner {
+            crates: vec![planned("pov", "0.4.0", "0.4.0", BumpKind::None)],
+            ..Default::default()
+        };
+        let up = upstream("pov", &[("0.3.1", false), ("0.4.0", true)]);
+
+        assert!(check_yanked_conflicts(&plan, &up).is_ok());
+    }
+
+    /// Resuming an interrupted release: the version went out already and is not
+    /// yanked, so it is skipped, not treated as a conflict.
+    #[test]
+    fn allows_a_version_that_is_published_and_live() {
+        let plan = Planner {
+            crates: vec![planned("pov", "0.3.1", "0.4.0", BumpKind::Major)],
+            ..Default::default()
+        };
+        let up = upstream("pov", &[("0.3.1", false), ("0.4.0", false)]);
+
+        assert!(check_yanked_conflicts(&plan, &up).is_ok());
+    }
+
+    #[test]
+    fn allows_a_free_version() {
+        let plan = Planner {
+            crates: vec![planned("pov", "0.3.1", "0.5.0", BumpKind::Major)],
+            ..Default::default()
+        };
+        let up = upstream("pov", &[("0.3.1", false), ("0.4.0", true)]);
+
+        assert!(check_yanked_conflicts(&plan, &up).is_ok());
+    }
+
+    /// `publish = false` crates never reach the registry.
+    #[test]
+    fn ignores_no_publish_crates() {
+        let mut pkg = planned("pov", "0.3.1", "0.4.0", BumpKind::Major);
+        pkg.publish = false;
+        let plan = Planner {
+            crates: vec![pkg],
+            ..Default::default()
+        };
+        let up = upstream("pov", &[("0.4.0", true)]);
+
+        assert!(check_yanked_conflicts(&plan, &up).is_ok());
+    }
 }

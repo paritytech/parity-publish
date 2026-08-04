@@ -262,17 +262,6 @@ pub async fn get_upstream(
     Ok(upstream)
 }
 
-/// A version number the planner had to step over because it is already taken on
-/// crates.io.
-struct Taken {
-    /// The published version that occupies the slot we wanted.
-    version: Version,
-    /// Whether that version is yanked. Yanked versions are the surprising case:
-    /// they are invisible in normal cargo queries but their number stays
-    /// reserved forever.
-    yanked: bool,
-}
-
 /// Bump `to` according to `bump`, skipping any version number that is already
 /// taken on the registry.
 ///
@@ -281,72 +270,58 @@ struct Taken {
 /// answers with `crate version 'x' is already uploaded` — so a plan that lands
 /// on one is guaranteed to fail halfway through the release.
 ///
-/// Returns the taken versions that were stepped over, for reporting.
-fn bump_version(to: &mut Version, bump: BumpKind, upstream: &[IndexSummary]) -> Vec<Taken> {
+/// Returns the taken releases that were stepped over, for reporting.
+fn bump_version<'a>(
+    to: &mut Version,
+    bump: BumpKind,
+    upstream: &'a [IndexSummary],
+) -> Vec<&'a IndexSummary> {
     let mut skipped = Vec::new();
 
-    // The lowest published version in a major/minor series, if the series is
-    // occupied at all. Used by major bumps, which skip whole series rather than
-    // single version numbers.
-    let occupied = |taken: &dyn Fn(&Version) -> bool| {
-        upstream
-            .iter()
-            .map(|u| u.as_summary().version())
-            .filter(|v| taken(v))
-            .min()
-            .map(|v| Taken {
-                version: v.clone(),
-                yanked: upstream
-                    .iter()
-                    .filter(|u| u.as_summary().version() == v)
-                    .any(|u| u.is_yanked()),
-            })
-    };
+    if bump == BumpKind::None {
+        return skipped;
+    }
 
-    match bump {
-        BumpKind::None => (),
-        BumpKind::Patch => loop {
-            to.patch += 1;
-            match occupied(&|v| v == to) {
-                Some(taken) => skipped.push(taken),
-                None => break,
-            }
-        },
-        BumpKind::Minor => loop {
-            if to.major == 0 {
-                to.patch += 1;
-            } else {
+    loop {
+        match bump {
+            BumpKind::None => unreachable!("returned above"),
+            BumpKind::Patch => to.patch += 1,
+            BumpKind::Minor if to.major == 0 => to.patch += 1,
+            BumpKind::Minor => {
                 to.minor += 1;
                 to.patch = 0;
             }
-            match occupied(&|v| v == to) {
-                Some(taken) => skipped.push(taken),
-                None => break,
-            }
-        },
-        BumpKind::Major => loop {
-            // For 0.x, the minor is the breaking-change component, so a whole
-            // 0.minor series has to be free before we can claim it.
-            let series: Box<dyn Fn(&Version) -> bool> = if to.major == 0 {
+            BumpKind::Major if to.major == 0 => {
                 to.minor += 1;
                 to.patch = 0;
-                let minor = to.minor;
-                Box::new(move |v: &Version| v.major == 0 && v.minor == minor)
-            } else {
+            }
+            BumpKind::Major => {
                 to.major += 1;
                 to.minor = 0;
                 to.patch = 0;
-                let major = to.major;
-                Box::new(move |v: &Version| v.major == major)
-            };
-            match occupied(&*series) {
-                Some(taken) => skipped.push(taken),
-                None => break,
             }
-        },
-    }
+        }
 
-    skipped
+        // A major bump claims a whole series, so every version in it has to be
+        // free -- a yanked 0.4.3 rules out 0.4.0 as well, rather than
+        // resurrecting a series that was pulled.
+        let occupied = upstream
+            .iter()
+            .filter(|u| {
+                let v = u.as_summary().version();
+                match bump {
+                    BumpKind::Major if to.major == 0 => v.major == 0 && v.minor == to.minor,
+                    BumpKind::Major => v.major == to.major,
+                    _ => v == to,
+                }
+            })
+            .min_by_key(|u| u.as_summary().version());
+
+        match occupied {
+            Some(taken) => skipped.push(taken),
+            None => return skipped,
+        }
+    }
 }
 
 /// Report the yanked versions a bump had to step over.
@@ -357,22 +332,25 @@ fn bump_version(to: &mut Version, bump: BumpKind, upstream: &[IndexSummary]) -> 
 fn report_taken(
     stderr: &mut termcolor::StandardStream,
     name: &str,
-    skipped: &[Taken],
+    skipped: &[&IndexSummary],
     to: &Version,
 ) -> Result<()> {
     let yanked = skipped
         .iter()
-        .filter(|t| t.yanked)
-        .map(|t| t.version.to_string())
+        .filter(|s| s.is_yanked())
+        .map(|s| s.as_summary().version().to_string())
         .collect::<Vec<_>>();
 
     if yanked.is_empty() {
         return Ok(());
     }
 
+    // Deliberately does not claim the yanked version was the only thing in the
+    // way: live releases in between are skipped too, so `to` is the next free
+    // version rather than the one right after the yanked release.
     writeln!(
         stderr,
-        "{}: skipping yanked version{} {} -- publishing {} instead",
+        "{}: version{} {} yanked on crates.io, next free version is {}",
         name,
         if yanked.len() == 1 { "" } else { "s" },
         yanked.join(", "),
@@ -598,15 +576,25 @@ fn get_version(
     upstream: &BTreeMap<String, Vec<IndexSummary>>,
     c: &Package,
 ) -> Result<Version> {
-    let upstreamc = upstream.get(c.name().as_str());
-    let mut from = upstreamc
+    Ok(pick_from_version(
+        upstream.get(c.name().as_str()).map(|u| u.as_slice()),
+        plan.pre.is_some(),
+        c.version(),
+    ))
+}
+
+/// The version a crate is considered to be at before this release: the highest
+/// release on the registry, or the local manifest version for a crate that has
+/// none.
+fn pick_from_version(upstream: Option<&[IndexSummary]>, pre: bool, local: &Version) -> Version {
+    let mut from = upstream
         // Fall back to the highest yanked version if every release was yanked,
         // so that the bump starts from what crates.io actually has rather than
         // from a stale local version.
-        .and_then(|u| max_ver(u, plan.pre.is_some()).or_else(|| max_ver_any(u, plan.pre.is_some())))
+        .and_then(|u| max_ver(u, pre).or_else(|| max_ver_any(u, pre)))
         .map(|u| u.as_summary().version().clone())
         .unwrap_or_else(|| {
-            let mut v = c.version().clone();
+            let mut v = local.clone();
             v.pre = Default::default();
             v.build = Default::default();
             v
@@ -616,7 +604,7 @@ fn get_version(
         from = Version::parse("0.1.0").unwrap();
     }
 
-    Ok(from)
+    from
 }
 
 fn remove_git_deps(
@@ -845,7 +833,7 @@ fn rewrite_deps(
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
     use cargo::core::{PackageId, SourceId, Summary};
     use std::collections::BTreeMap;
@@ -854,7 +842,7 @@ mod tests {
 
     /// Build index summaries from `(version, yanked)` pairs, as the registry
     /// would return them for one crate.
-    fn summaries(versions: &[(&str, bool)]) -> Vec<IndexSummary> {
+    pub fn summaries(versions: &[(&str, bool)]) -> Vec<IndexSummary> {
         let source = SourceId::from_url(CRATES_IO).unwrap();
         let features = BTreeMap::new();
 
@@ -925,6 +913,14 @@ mod tests {
     }
 
     #[test]
+    fn minor_bump_on_zero_x_skips_yanked_patch() {
+        // Below 1.0 a minor bump moves the patch component, since the minor is
+        // where breaking changes go.
+        let upstream = [("0.3.0", false), ("0.3.1", true)];
+        assert_eq!(bump("0.3.0", BumpKind::Minor, &upstream), "0.3.2");
+    }
+
+    #[test]
     fn patch_bump_skips_yanked_version() {
         let upstream = [("0.3.0", false), ("0.3.1", true)];
         assert_eq!(bump("0.3.0", BumpKind::Patch, &upstream), "0.3.2");
@@ -943,8 +939,11 @@ mod tests {
         let skipped = bump_version(&mut to, BumpKind::Major, &upstream);
 
         assert_eq!(skipped.len(), 1);
-        assert_eq!(skipped[0].version, Version::parse("0.4.0").unwrap());
-        assert!(skipped[0].yanked);
+        assert_eq!(
+            skipped[0].as_summary().version(),
+            &Version::parse("0.4.0").unwrap()
+        );
+        assert!(skipped[0].is_yanked());
     }
 
     #[test]
@@ -959,6 +958,29 @@ mod tests {
             .as_summary()
             .version();
         assert_eq!(any, &Version::parse("0.4.0").unwrap());
+    }
+
+    #[test]
+    fn from_version_falls_back_to_yanked_when_all_releases_are_yanked() {
+        let local = Version::parse("0.1.0").unwrap();
+
+        // A live release wins.
+        let mixed = summaries(&[("0.3.1", false), ("0.4.0", true)]);
+        assert_eq!(
+            pick_from_version(Some(&mixed), false, &local),
+            Version::parse("0.3.1").unwrap()
+        );
+
+        // Everything yanked: use what the registry has, not the local version,
+        // so the bump starts above the yanked releases.
+        let all_yanked = summaries(&[("0.3.0", true), ("0.4.0", true)]);
+        assert_eq!(
+            pick_from_version(Some(&all_yanked), false, &local),
+            Version::parse("0.4.0").unwrap()
+        );
+
+        // Unpublished crate: fall back to the local manifest version.
+        assert_eq!(pick_from_version(None, false, &local), local);
     }
 
     #[test]

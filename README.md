@@ -218,6 +218,33 @@ end result when applied.
 Once a release has been ran, patch releases can be done by running `parity-publish plan --patch foo`.
 This will patch version bump the crate `foo` in the plan ready to be applied.
 
+#### Yanked versions
+
+Version numbers that are already taken on crates.io are skipped, **including yanked ones**.
+A yanked release keeps its version number reserved forever: re-uploading it fails with
+`crate version 'x' is already uploaded`. So if `cumulus-pov-validator` 0.4.0 was released
+and later yanked, a major bump from 0.3.1 plans 0.5.0 rather than 0.4.0, and prints:
+
+```
+cumulus-pov-validator: version 0.4.0 yanked on crates.io, next free version is 0.5.0
+```
+
+The reported version is the next *free* one, not necessarily the one right after the yanked
+release — live releases in between are skipped too, silently, since that is routine.
+
+Below 1.0 the minor is the breaking-change component, so a major bump claims a whole `0.x`
+series and needs all of it free: a yanked `0.4.3` rules out `0.4.0` as well, rather than
+publishing into a series that was pulled.
+
+Yanked releases are still not used for anything else: they're never picked as the version
+a crate is bumped `from`, and dependencies are never rewritten to point at them.
+
+If a `Plan.toml` still releases a crate at a version that has since been yanked, `apply`
+refuses to start — before any manifest is rewritten — and lists the affected crates, rather
+than failing partway through the release. Crates the plan isn't moving (`from == to`) are
+left alone: their current version being yanked is a pre-existing state of the repo, not a
+reason to block a release they aren't part of.
+
 ### Example
 
 ```

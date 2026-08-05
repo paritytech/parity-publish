@@ -12,6 +12,7 @@ use semver::{Version, VersionReq};
 use toml_edit::{DocumentMut, Formatted};
 
 use crate::plan::{Planner, RemoveCrate, RemoveDep, RemoveFeature, RewriteDep};
+use crate::registry;
 
 pub fn rewrite_workspace_dep(
     workspace_path: &Path,
@@ -74,7 +75,11 @@ pub fn rewrite_workspace_dep(
                 && use_registry
                 && upstream
                     .get(name)
-                    .and_then(|d| d.iter().find(|d| ver.matches(d.as_summary().version())))
+                    .and_then(|d| {
+                        d.iter()
+                            .filter(|d| registry::is_usable(d))
+                            .find(|d| ver.matches(d.as_summary().version()))
+                    })
                     .is_some()
             {
                 let _ = wdep.remove("path");
@@ -166,7 +171,11 @@ pub fn rewrite_deps(
                         && use_registry
                         && upstream
                             .get(existing_dep.name.as_str())
-                            .and_then(|d| d.iter().find(|d| ver.matches(d.as_summary().version())))
+                            .and_then(|d| {
+                                d.iter()
+                                    .filter(|d| registry::is_usable(d))
+                                    .find(|d| ver.matches(d.as_summary().version()))
+                            })
                             .is_some()
                     {
                         let source = RegistrySource::new(&new_ver);

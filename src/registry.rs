@@ -15,7 +15,18 @@ pub fn get_registry<'a>(workspace: &Workspace<'a>) -> Result<RegistrySource<'a>>
     let whitelist = workspace.members().map(|c| c.package_id()).collect();
     let config = workspace.gctx();
 
-    let mut reg = RegistrySource::remote(SourceId::crates_io(config)?, &whitelist, config)?;
+    // `SourceId::crates_io` is hardwired to the *git* index. Since every call
+    // here follows with `invalidate_cache`, that means refreshing a multi-GB git
+    // repository on every single invocation. Use the sparse index instead, which
+    // fetches only the index files for the crates actually being looked up.
+    //
+    // `crates_io_maybe_sparse_http` honours `registries.crates-io.protocol`, so
+    // anyone who has deliberately pinned the git protocol still gets it.
+    let mut reg = RegistrySource::remote(
+        SourceId::crates_io_maybe_sparse_http(config)?,
+        &whitelist,
+        config,
+    )?;
     reg.invalidate_cache();
 
     Ok(reg)

@@ -1,0 +1,85 @@
+# Publishing is handled centrally by
+# https://github.com/paritytech/crates_publish_automation — this workflow only
+# packages the crate and dispatches to it. The crates.io token lives in that
+# repo, never here.
+#
+# Prerequisites (both are one-off, outside this repo):
+#   1. "parity-publish": ["parity-publish"] must be present in crates.ts of
+#      crates_publish_automation, otherwise the dispatch is rejected.
+#   2. parity-crate-owner must own the crate on crates.io. Already true here.
+name: Release
+
+on:
+  release:
+    types:
+      - created
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Package & publish to crates.io
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 #v2.9.2
+
+      # cargo package build-verifies, which needs the same system deps as ci.yml:
+      # reqwest's default-tls pulls native-tls -> openssl, and cargo/git2 need
+      # libgit2's deps.
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libssl-dev
+
+      # The automation silently skips versions already on crates.io, so a tag
+      # that disagrees with Cargo.toml would produce a green run that published
+      # nothing. Fail loudly instead. Tag is read via env, not ${{ }}
+      # interpolation, so it cannot be injected into the shell.
+      - name: Check the release tag matches Cargo.toml
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          manifest="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')"
+          if [ "${TAG#v}" != "$manifest" ]; then
+            echo "::error::Release tag '$TAG' does not match Cargo.toml version '$manifest'."
+            exit 1
+          fi
+          echo "Releasing parity-publish $manifest"
+
+      # Single-crate repo, so no -p/--exclude filtering is needed. Verification
+      # is left on: it is the only thing that proves the packaged tarball
+      # actually builds. Add --no-verify if release runs get too slow.
+      - name: Cargo package
+        run: cargo package --locked
+
+      # Must stay named "crates" — the automation picks the first artifact of
+      # the triggering run and expects .crate files.
+      - name: Upload artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: crates
+          path: target/package/*.crate
+          if-no-files-found: error
+
+      - name: Generate content write token
+        id: generate-content-write-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.CRATES_NPM_PUBLISHING_APP_CLIENT_ID }}
+          private-key: ${{ secrets.CRATES_NPM_PUBLISHING_APP_PRIVATE_KEY }}
+          owner: paritytech
+
+      - name: Trigger publishing in the crates_publish_automation repo
+        uses: octokit/request-action@b91aabaa861c777dcdb14e2387e30eddf04619ae #v3.0.0
+        with:
+          route: POST /repos/paritytech/crates_publish_automation/actions/workflows/publish.yml/dispatches
+          ref: main
+          inputs: '${{ format(''{{ "repo": "{0}", "run_id": "{1}" }}'', github.repository, github.run_id) }}'
+        env:
+          GITHUB_TOKEN: ${{steps.generate-content-write-token.outputs.token }}

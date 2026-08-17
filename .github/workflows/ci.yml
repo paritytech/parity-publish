@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: check & test
+    runs-on: ubuntu-latest
+    env:
+      # The crate builds warning-free today; keep it that way.
+      RUSTFLAGS: -D warnings
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      # reqwest's default-tls pulls in native-tls -> openssl on Linux, and
+      # cargo/git2 need libgit2's system deps. macOS uses Security.framework
+      # instead, so this path is only exercised here.
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libssl-dev
+
+      # --locked fails if Cargo.lock is stale, so dependency PRs are verified
+      # against the exact lockfile they commit.
+      - name: cargo check
+        run: cargo check --all-targets --locked
+
+      - name: cargo test
+        run: cargo test --locked
+
+  clippy:
+    name: clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libssl-dev
+
+      # Informational only: the existing code has ~38 clippy warnings, so this
+      # deliberately does not pass -D warnings. Clear the backlog first, then
+      # promote this to a gating check.
+      - name: cargo clippy
+        run: cargo clippy --all-targets --locked

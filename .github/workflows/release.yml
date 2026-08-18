@@ -3,23 +3,17 @@
 # packages the crate and dispatches to it. The crates.io token lives in that
 # repo, never here.
 #
-# Flow: bump the version, merge, then push a vX.Y.Z tag. This workflow drafts a
-# release with generated notes and packages the crate, then waits for a reviewer
-# to approve the `crates-io` environment before dispatching the publish. Once
+# Flow: bump the version, merge, then push a vX.Y.Z tag should be done separately.
+# This workflow is triggered on the release tag push and drafts a release
+# with generated notes and packages the crate, then waits for a reviewer
+# to approve the `crates-io` environment before dispatching the publishing. Once
 # crates.io shows the new version, publish the draft by hand -- it is the
 # announcement, not a gate.
-#
-# Deliberately NOT triggered on the `release` event: publishing the draft by
-# hand would fire it and start a second, pointless publish run.
 #
 # Prerequisites (all one-off, outside this repo):
 #   1. "parity-publish": ["parity-publish"] must be present in crates.ts of
 #      crates_publish_automation, otherwise the dispatch is rejected.
 #   2. parity-crate-owner must own the crate on crates.io. Already true here.
-#   3. A `crates-io` environment with required reviewers must exist in this
-#      repo's settings. Without it GitHub creates the environment implicitly
-#      with NO protection rules, and the publish proceeds unreviewed -- which
-#      is the whole point of the split, since ~180 people can push a tag.
 name: Release
 
 on:
@@ -27,8 +21,6 @@ on:
     tags:
       - "v*.*.*"
 
-# Least privilege by default; only the drafting job is granted contents: write.
-# The publish job needs nothing -- it authenticates with the App token.
 permissions:
   contents: read
 
@@ -47,7 +39,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 #v2.9.2
 
       # cargo package build-verifies, which needs the same system deps as ci.yml:
-      # reqwest's default-tls pulls native-tls -> openssl, and cargo/git2 need
+      # request's default-tls pulls native-tls -> openssl, and cargo/git2 need
       # libgit2's deps.
       - name: Install system dependencies
         run: |
@@ -56,8 +48,7 @@ jobs:
 
       # The automation silently skips versions already on crates.io, so a tag
       # that disagrees with Cargo.toml would produce a green run that published
-      # nothing. Fail loudly instead. Tag is read via env, not ${{ }}
-      # interpolation, so it cannot be injected into the shell.
+      # nothing. Fail loudly instead.
       - name: Check the release tag matches Cargo.toml
         env:
           TAG: ${{ github.ref_name }}

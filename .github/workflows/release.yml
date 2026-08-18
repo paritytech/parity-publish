@@ -3,24 +3,41 @@
 # packages the crate and dispatches to it. The crates.io token lives in that
 # repo, never here.
 #
-# Prerequisites (both are one-off, outside this repo):
+# Flow: bump the version, merge, then push a vX.Y.Z tag. This workflow drafts a
+# release with generated notes and packages the crate, then waits for a reviewer
+# to approve the `crates-io` environment before dispatching the publish. Once
+# crates.io shows the new version, publish the draft by hand -- it is the
+# announcement, not a gate.
+#
+# Deliberately NOT triggered on the `release` event: publishing the draft by
+# hand would fire it and start a second, pointless publish run.
+#
+# Prerequisites (all one-off, outside this repo):
 #   1. "parity-publish": ["parity-publish"] must be present in crates.ts of
 #      crates_publish_automation, otherwise the dispatch is rejected.
 #   2. parity-crate-owner must own the crate on crates.io. Already true here.
+#   3. A `crates-io` environment with required reviewers must exist in this
+#      repo's settings. Without it GitHub creates the environment implicitly
+#      with NO protection rules, and the publish proceeds unreviewed -- which
+#      is the whole point of the split, since ~180 people can push a tag.
 name: Release
 
 on:
-  release:
-    types:
-      - created
+  push:
+    tags:
+      - "v*.*.*"
 
+# Least privilege by default; only the drafting job is granted contents: write.
+# The publish job needs nothing -- it authenticates with the App token.
 permissions:
   contents: read
 
 jobs:
-  publish:
-    name: Package & publish to crates.io
+  package:
+    name: Draft release & package
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -43,14 +60,29 @@ jobs:
       # interpolation, so it cannot be injected into the shell.
       - name: Check the release tag matches Cargo.toml
         env:
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ github.ref_name }}
         run: |
           manifest="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')"
           if [ "${TAG#v}" != "$manifest" ]; then
-            echo "::error::Release tag '$TAG' does not match Cargo.toml version '$manifest'."
+            echo "::error::Tag '$TAG' does not match Cargo.toml version '$manifest'."
             exit 1
           fi
           echo "Releasing parity-publish $manifest"
+
+      # Notes are generated server-side from merged PRs, so no git history is
+      # needed. Left as a draft on purpose: publish it once crates.io has the
+      # version. Skipped if the release already exists, so re-running a failed
+      # tag is safe -- the crates.io side is idempotent too.
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists, leaving it alone."
+          else
+            gh release create "$TAG" --draft --generate-notes --title "$TAG"
+          fi
 
       # Single-crate repo, so no -p/--exclude filtering is needed. Verification
       # is left on: it is the only thing that proves the packaged tarball
@@ -67,6 +99,18 @@ jobs:
           path: target/package/*.crate
           if-no-files-found: error
 
+  # Split out purely so the crates.io publish sits behind the `crates-io`
+  # environment's required reviewers. Nothing here needs a checkout or Rust.
+  # The dispatch passes github.run_id, and artifacts belong to the *run* rather
+  # than the job, so the automation still finds what `package` uploaded.
+  publish:
+    name: Publish to crates.io
+    needs: package
+    runs-on: ubuntu-latest
+    environment:
+      name: crates-io
+      url: https://crates.io/crates/parity-publish
+    steps:
       - name: Generate content write token
         id: generate-content-write-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0

@@ -4013,7 +4013,7 @@ dependencies = [
 
 [[package]]
 name = "parity-publish"
-version = "0.10.17"
+version = "0.10.18"
 dependencies = [
  "anyhow",
  "cargo",

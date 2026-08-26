@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs::read_to_string;
 use std::path::Path;
 
@@ -24,6 +24,7 @@ pub fn rewrite_workspace_dep(
     cdep: &mut Dependency,
     dev: bool,
     use_registry: bool,
+    local_path_overrides: Option<&BTreeSet<String>>,
 ) -> Result<()> {
     let wdeps = root_manifest
         .get_mut("workspace")
@@ -73,6 +74,7 @@ pub fn rewrite_workspace_dep(
         if let Some(pkg) = workspace_crates.get(name) {
             if pkg.publish().is_none()
                 && use_registry
+                && !local_path_overrides.is_some_and(|s| s.contains(name))
                 && upstream
                     .get(name)
                     .and_then(|d| {
@@ -107,6 +109,7 @@ pub fn rewrite_deps(
     upstream: &BTreeMap<String, Vec<IndexSummary>>,
     deps: &[RewriteDep],
     use_registry: bool,
+    local_path_overrides: Option<&BTreeSet<String>>,
 ) -> Result<()> {
     for dep in deps {
         let exisiting_deps = manifest
@@ -140,6 +143,7 @@ pub fn rewrite_deps(
                         &mut existing_dep,
                         dev,
                         use_registry,
+                        local_path_overrides,
                     )?;
                     manifest.insert_into_table(
                         &table,
@@ -167,16 +171,21 @@ pub fn rewrite_deps(
 
                 if let Some(pkg) = workspace_crates.get(existing_dep.name.as_str()) {
                     let ver = VersionReq::parse(&new_ver).unwrap();
+                    let local_path_override = local_path_overrides
+                        .is_some_and(|s| s.contains(existing_dep.name.as_str()));
+                    let is_upstream_usable = upstream
+                        .get(existing_dep.name.as_str())
+                        .and_then(|d| {
+                            d.iter()
+                                .filter(|d| registry::is_usable(d))
+                                .find(|d| ver.matches(d.as_summary().version()))
+                        })
+                        .is_some();
+
                     if pkg.publish().is_none()
                         && use_registry
-                        && upstream
-                            .get(existing_dep.name.as_str())
-                            .and_then(|d| {
-                                d.iter()
-                                    .filter(|d| registry::is_usable(d))
-                                    .find(|d| ver.matches(d.as_summary().version()))
-                            })
-                            .is_some()
+                        && !local_path_override
+                        && is_upstream_usable
                     {
                         let source = RegistrySource::new(&new_ver);
                         let existing_dep = existing_dep.set_source(source);

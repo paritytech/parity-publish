@@ -6,7 +6,7 @@ use cargo::{
     util::{cache_lock::CacheLockMode, toml_mut::manifest::LocalManifest},
 };
 
-use semver::Version;
+use semver::{Version, VersionReq};
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -82,6 +82,10 @@ pub async fn handle_apply(args: Args, apply: Apply) -> Result<()> {
     let mut plan: Planner = toml::from_str(&plan)?;
     expand_plan(&workspace, &workspace_crates, &mut plan, &upstream).await?;
 
+    let local_path_overrides = apply
+        .registry
+        .then(|| compute_must_use_local(&workspace, &plan, &upstream));
+
     if apply.print {
         list(&path, &cargo_config, &plan)?;
         return Ok(());
@@ -149,6 +153,7 @@ pub async fn handle_apply(args: Args, apply: Apply) -> Result<()> {
             &upstream,
             &pkg.rewrite_dep,
             apply.registry,
+            local_path_overrides.as_ref(),
         )?;
 
         for remove_feature in &pkg.remove_feature {
@@ -171,6 +176,68 @@ pub async fn handle_apply(args: Args, apply: Apply) -> Result<()> {
     } else {
         publish(&args, &apply, &cargo_config, plan, &path, token)
     }
+}
+
+/// Crates that must keep path deps under `apply --registry`: those whose new
+/// version isn't on the registry yet, plus everything depending on them.
+///
+/// Taking such a crate from the registry instead would pull the old versions of
+/// its own deps, leaving two copies of the same crate in the graph.
+fn compute_must_use_local(
+    workspace: &Workspace,
+    plan: &Planner,
+    upstream: &BTreeMap<String, Vec<IndexSummary>>,
+) -> BTreeSet<String> {
+    // Seed: crates whose new version isn't on the registry yet.
+    let mut must_use_local = BTreeSet::new();
+    for pkg in &plan.crates {
+        let ver = VersionReq::parse(&pkg.to).ok();
+        let on_registry = ver.as_ref().is_some_and(|req| {
+            upstream
+                .get(&pkg.name)
+                .is_some_and(|versions| has_usable_matching_version(versions, req))
+        });
+        if !on_registry {
+            must_use_local.insert(pkg.name.clone());
+        }
+    }
+
+    // crate -> its direct dependents.
+    let mut dependents: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    for member in workspace.members() {
+        let name = member.name().to_string();
+        for dep in member
+            .dependencies()
+            .iter()
+            .filter(|d| d.kind() != DepKind::Development)
+        {
+            dependents
+                .entry(dep.package_name().to_string())
+                .or_default()
+                .insert(name.clone());
+        }
+    }
+
+    // Propagate to transitive dependents.
+    let mut queue: Vec<String> = must_use_local.iter().cloned().collect();
+    while let Some(crate_name) = queue.pop() {
+        if let Some(dependents) = dependents.get(&crate_name) {
+            for dependent in dependents {
+                if must_use_local.insert(dependent.clone()) {
+                    queue.push(dependent.clone());
+                }
+            }
+        }
+    }
+
+    must_use_local
+}
+
+fn has_usable_matching_version(versions: &[IndexSummary], req: &VersionReq) -> bool {
+    versions
+        .iter()
+        .filter(|version| registry::is_usable(version))
+        .any(|version| req.matches(version.as_summary().version()))
 }
 
 fn list(
@@ -667,6 +734,22 @@ mod tests {
         let mut map = BTreeMap::new();
         map.insert(name.to_string(), crate::plan::tests::summaries(versions));
         map
+    }
+
+    #[test]
+    fn yanked_versions_are_not_usable_for_registry_overrides() {
+        let versions = crate::plan::tests::summaries(&[("0.4.0", true)]);
+        let req = VersionReq::parse("0.4.0").unwrap();
+
+        assert!(!has_usable_matching_version(&versions, &req));
+    }
+
+    #[test]
+    fn live_versions_are_usable_for_registry_overrides() {
+        let versions = crate::plan::tests::summaries(&[("0.4.0", false)]);
+        let req = VersionReq::parse("0.4.0").unwrap();
+
+        assert!(has_usable_matching_version(&versions, &req));
     }
 
     /// A plan that releases a crate at a yanked number can never succeed, so it
